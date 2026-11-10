@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const LINKS = [
   { href: "/", label: "조직도" },
   { href: "/office", label: "자리 배치도" },
+  { href: "/projects", label: "프로젝트" },
   { href: "/tasks", label: "작업" },
   { href: "/reports", label: "보고" },
   { href: "/approvals", label: "승인함" },
@@ -18,7 +19,7 @@ export function Nav({ pendingApprovals }: { pendingApprovals: number }) {
     <nav aria-label="주 메뉴">
       <ul className="nav">
         {LINKS.map((link) => {
-          const active = link.href === "/" ? pathname === "/" || pathname.startsWith("/teams") : pathname.startsWith(link.href);
+          const active = link.href === "/" ? pathname === "/" || pathname.startsWith("/teams") || pathname.startsWith("/divisions") : pathname.startsWith(link.href);
           return (
             <li key={link.href}>
               <Link href={link.href} className="nav__link" aria-current={active ? "page" : undefined}>

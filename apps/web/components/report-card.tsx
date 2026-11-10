@@ -13,20 +13,22 @@ export function ReportCard({ report, org, showTask = false }: Props) {
   const lead = team ? leadOf(team) : undefined;
   const next = report.nextTeamId ? (findTeam(org, report.nextTeamId)?.team.name ?? report.nextTeamId) : report.nextHuman;
 
-  const author =
-    report.level === "division"
+  const member = report.level === "member" && team ? team.roles.find((role) => role.id === report.roleId) : undefined;
+  const author = member
+    ? { seed: member.id, name: member.person.name, gender: member.person.gender, title: `${team?.name ?? ""} ${member.rank} · 경력 ${member.person.years}년` }
+    : report.level === "division"
       ? { seed: `head-${report.divisionId}`, name: division?.head.name ?? "본부장", gender: division?.head.gender ?? "female", title: `${division?.name ?? report.divisionId} 본부장 · 경력 ${division?.head.years ?? 0}년` }
       : { seed: lead?.id ?? report.teamId ?? "team", name: lead?.person.name ?? "팀장", gender: lead?.person.gender ?? "male", title: `${team?.name ?? report.teamId} 팀장${lead ? ` · 경력 ${lead.person.years}년` : ""}` };
 
   return (
     <article className={`report report--${report.level} report--${report.outcome}`}>
-      <Avatar seed={author.seed} gender={author.gender} name={author.name} divisionId={report.divisionId} size={36} senior />
+      <Avatar seed={author.seed} gender={author.gender} name={author.name} divisionId={report.divisionId} size={36} senior={!member || member.rank === "팀장"} />
       <div className="report__main">
         <header className="report__head">
           <span className="report__author">
             <strong>{author.name}</strong> {author.title}
           </span>
-          <span className="report__kind">{report.level === "division" ? "본부 보고" : "팀 보고"}</span>
+          <span className="report__kind">{report.level === "division" ? "본부 보고" : report.level === "team" ? "팀 보고" : "팀원 보고"}</span>
           <span className={`stage stage--${report.stage}`}>{STAGE_LABEL[report.stage]}</span>
           <span className={`outcome outcome--${report.outcome}`}>{OUTCOME_LABEL[report.outcome]}</span>
           <time dateTime={report.createdAt.toISOString()}>{formatDate(report.createdAt)}</time>
