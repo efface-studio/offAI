@@ -7,6 +7,7 @@ const DIVISION_COLOR: Record<string, string> = {
   product: "#3b6fd8",
   quality: "#7a5cd6",
   risk: "#d0533f",
+  business: "#d9468f",
   operations: "#2f9a8a",
 };
 const FALLBACK_COLOR = "#6b7280";
