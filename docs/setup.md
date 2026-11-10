@@ -55,7 +55,7 @@ worker 의 명령 정책(`packages/core/src/policy.ts`)도 main push·force push
 pnpm --filter @offai/worker setup:agents
 ```
 
-- environment 하나를 만들고(이미 있으면 재사용) 조직의 직원 36명을 agent 로 동기화한다
+- environment 하나를 만들고(이미 있으면 재사용) 조직의 직원 56명을 agent 로 동기화한다
 - 이후 콘솔에서 조직을 수정하면 worker 가 다음 주기에 바뀐 직원만 새 버전으로 갱신한다
 
 ## 5. worker 실행
@@ -70,10 +70,10 @@ webhook 을 로컬에서 받으려면 cloudflared 등으로 4445 포트를 외�
 
 1. 대상 레포 Issue 에 `offai` label 을 붙인다
 2. **기획**: 기획팀이 명세를 쓰고, UI 작업이면 디자인팀이 화면 명세를 더한다 → Issue 코멘트. 모호하면 질문을 남기고 멈춘다
-3. **구현**: Web/Backend 팀이 브랜치에서 구현·push → offAI 가 PR 생성
+3. **구현**: label 에 따라 Web·Backend·Mobile·플랫폼·데이터·AI 팀이 브랜치에서 구현·push → offAI 가 PR 생성
 4. **검증**: QA팀 + (경로·label 에 따라) 보안팀, 법무팀 → 수정 요청이면 구현으로 되돌림 (최대 2회)
 5. **사람**: PR 검토 후 merge
-6. **배포 준비**: 릴리스팀이 빌드 확인, 배포 요청서를 PR 에 남김
+6. **배포 준비**: 릴리스팀이 빌드 확인, 배포 요청서를 PR 에 남김 (새 기능이면 마케팅팀이 출시 공지 초안을 함께 남김)
 7. **사람**: production 배포 후 콘솔에서 '배포 완료 기록'
 8. **운영**: `OPERATE_INTERVAL_HOURS` 마다 운영팀 정기 점검 → 문제는 `offai` label 없는 Issue 로 생성 (사람이 label 을 붙여야 진행)
 

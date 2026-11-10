@@ -41,7 +41,9 @@ describe("기본 조직", () => {
       expect(new Set(team.roles.map((role) => role.person.gender)).size).toBe(2);
     }
     const teamNames = listTeams(DEFAULT_ORG).map(({ team }) => team.name);
-    expect(teamNames).toEqual(expect.arrayContaining(["기획팀", "디자인팀", "보안팀", "법무팀", "운영팀"]));
+    expect(teamNames).toEqual(
+      expect.arrayContaining(["기획팀", "디자인팀", "보안팀", "법무팀", "운영팀", "Mobile팀", "플랫폼팀", "데이터팀", "AI팀", "마케팅팀"]),
+    );
   });
 });
 
@@ -49,6 +51,28 @@ describe("라우팅", () => {
   it("label이 맞는 구현팀을 고른다", () => {
     expect(routeTask(DEFAULT_ORG, { stage: "implement", labels: ["⚙️ backend"] }).team.id).toBe("backend");
     expect(routeTask(DEFAULT_ORG, { stage: "implement", labels: ["🖥️ web"] }).team.id).toBe("web");
+  });
+
+  it("제품개발본부 직군별로 구현팀을 고른다", () => {
+    const team = (labels: string[]) => routeTask(DEFAULT_ORG, { stage: "implement", labels }).team.id;
+    expect(team(["📱 ios"])).toBe("mobile");
+    expect(team(["📱 android"])).toBe("mobile");
+    expect(team(["☁️ infra"])).toBe("platform");
+    expect(team(["👷 ci"])).toBe("platform");
+    expect(team(["🗄️ database"])).toBe("data");
+    expect(team(["📊 data"])).toBe("data");
+    expect(team(["🧠 ai"])).toBe("ai");
+    expect(team(["⚙️ backend"])).toBe("backend");
+  });
+
+  it("새 기능이면 배포 준비에 마케팅팀이 함께한다", () => {
+    const ids = (labels: string[]) => teamsForStage(DEFAULT_ORG, { stage: "release", labels }).map(({ team }) => team.id);
+    expect(ids(["✨ feature"])).toEqual(["release", "marketing"]);
+    expect(ids(["🐛 bug"])).toEqual(["release"]);
+  });
+
+  it("운영 단계의 ☁️ infra 는 운영팀이 맡는다", () => {
+    expect(routeTask(DEFAULT_ORG, { stage: "operate", labels: ["☁️ infra"] }).team.id).toBe("ops");
   });
 
   it("label이 없으면 해당 단계의 첫 팀을 고른다", () => {

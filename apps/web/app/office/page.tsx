@@ -15,7 +15,7 @@ export default async function OfficePage() {
   const working = [...activity.values()].filter((item) => item.state === "working").length;
 
   return (
-    <>
+    <div className="bleed">
       <div className="page-head">
         <div>
           <h1>자리 배치도</h1>
@@ -52,13 +52,13 @@ export default async function OfficePage() {
           </div>
         </section>
       </div>
-    </>
+    </div>
   );
 }
 
 function Zone({ division, activity }: { division: Division; activity: Map<string, TeamActivity> }) {
   return (
-    <section className={`zone zone--${division.id}`} role="listitem" aria-labelledby={`zone-${division.id}`}>
+    <section className={`zone zone--${division.id}${division.teams.length > 3 ? " zone--wide" : ""}`} role="listitem" aria-labelledby={`zone-${division.id}`}>
       <header className="zone__head">
         <h2 className="zone__name" id={`zone-${division.id}`}>
           {division.name}

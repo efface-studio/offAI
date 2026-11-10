@@ -15,7 +15,7 @@ export default async function OrgChartPage() {
   const women = people.filter((role) => role.person.gender === "female").length;
 
   return (
-    <>
+    <div className="bleed">
       <div className="page-head">
         <div>
           <h1>조직도</h1>
@@ -54,7 +54,7 @@ export default async function OrgChartPage() {
           <span className="chart__root-name">{org.name}</span>
           <span className="chart__root-meta">대표 · merge와 production 배포 승인</span>
         </div>
-        <ul className="chart__divisions" style={{ ["--cols" as string]: org.divisions.length }}>
+        <ul className="chart__divisions">
           {org.divisions.map((division) => (
             <DivisionColumn key={division.id} division={division} spentCents={spend.get(division.id) ?? 0} />
           ))}
@@ -82,7 +82,7 @@ export default async function OrgChartPage() {
           사람에게 넘깁니다.
         </p>
       </section>
-    </>
+    </div>
   );
 }
 
@@ -101,7 +101,7 @@ function FlowStep({ title, owner, human = false, children }: { title: string; ow
 function DivisionColumn({ division, spentCents }: { division: Division; spentCents: number }) {
   const usage = Math.min(spentCents / division.monthlyBudgetCents, 1);
   return (
-    <li className="division">
+    <li className={`division${division.teams.length > 3 ? " division--wide" : ""}`}>
       <div className="division__head">
         <div className="division__title">
           <Avatar seed={`head-${division.id}`} gender={division.head.gender} name={division.head.name} divisionId={division.id} size={40} senior />
