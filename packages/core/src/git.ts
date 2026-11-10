@@ -3,6 +3,17 @@
 export const BRANCH_TYPES = ["feat", "fix", "refactor", "chore", "docs", "test", "perf", "ci"] as const;
 export type BranchType = (typeof BRANCH_TYPES)[number];
 
+export const GITMOJI: Record<BranchType, string> = {
+  feat: "✨",
+  fix: "🐛",
+  refactor: "♻️",
+  chore: "🔧",
+  docs: "📝",
+  test: "✅",
+  perf: "⚡",
+  ci: "👷",
+};
+
 const LABEL_TO_TYPE: Record<string, BranchType> = {
   "✨ feature": "feat",
   "🐛 bug": "fix",

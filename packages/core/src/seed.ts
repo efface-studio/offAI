@@ -201,7 +201,7 @@ export const DEFAULT_ORG: Org = {
                 "너는 SRE다. 서비스 헬스체크와 최근 CI 실패를 점검한다. 문제를 찾으면 증상, 근거, 추정 원인을 report_result의 followups에 Issue 초안으로 남긴다. 운영 환경에 변경을 가하지 않는다.",
               model: "claude-sonnet-5-5",
               effort: "medium",
-              tools: "read_only",
+              tools: "full",
             }),
           ],
         },
