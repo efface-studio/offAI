@@ -3,17 +3,16 @@ import { listTeams, type Org, type Stage, type TeamRef } from "./org";
 export type RoutingInput = {
   stage: Stage;
   labels: readonly string[];
-  /** verify 단계에서 보안 검토 여부를 정할 때 쓰는 변경 파일 경로 */
+  /** 변경 파일 경로 (검증 단계의 조건부 팀 판단용) */
   changedFiles?: readonly string[];
 };
 
 /**
- * 단계와 Issue label로 담당 팀을 고른다.
- * 같은 단계의 팀 중 label이 겹치는 팀을 우선하고, 없으면 label 조건이 없는 팀, 그다음 첫 팀을 고른다.
- * verify 단계의 보안팀은 primary로 고르지 않고 needsSecurityReview로 따로 판단한다.
+ * 단계의 주 담당 팀을 고른다.
+ * primary 팀 중 label 이 겹치는 팀을 우선하고, 없으면 label 조건이 없는 팀, 그다음 첫 팀을 고른다.
  */
 export function routeTask(org: Org, input: RoutingInput): TeamRef {
-  const candidates = listTeams(org).filter(({ team }) => team.stage === input.stage && team.id !== "security");
+  const candidates = listTeams(org).filter(({ team }) => team.stage === input.stage && team.assignment === "primary");
   const matched = candidates.find(({ team }) => team.labels.some((label) => input.labels.includes(label)));
   const fallback = candidates.find(({ team }) => team.labels.length === 0) ?? candidates[0];
   const picked = matched ?? fallback;
@@ -21,9 +20,18 @@ export function routeTask(org: Org, input: RoutingInput): TeamRef {
   return picked;
 }
 
-export function needsSecurityReview(org: Org, input: RoutingInput): boolean {
-  if (input.labels.includes("🔒 security")) return true;
-  return (input.changedFiles ?? []).some((file) => org.securityPaths.some((pattern) => matchGlob(pattern, file)));
+/** 조건이 맞아 이번 단계에 함께 참여할 조건부 팀 (label 또는 변경 경로) */
+export function conditionalTeams(org: Org, input: RoutingInput): TeamRef[] {
+  return listTeams(org).filter(({ team }) => {
+    if (team.stage !== input.stage || team.assignment !== "conditional") return false;
+    if (team.labels.some((label) => input.labels.includes(label))) return true;
+    return (input.changedFiles ?? []).some((file) => team.triggerPaths.some((pattern) => matchGlob(pattern, file)));
+  });
+}
+
+/** 단계에 참여하는 모든 팀: 주 담당 다음에 조건부 팀 */
+export function teamsForStage(org: Org, input: RoutingInput): TeamRef[] {
+  return [routeTask(org, input), ...conditionalTeams(org, input)];
 }
 
 /** `**`(여러 단계), `*`(한 단계 안)만 지원하는 최소 glob */

@@ -51,14 +51,14 @@ export class InvalidTransitionError extends Error {
   }
 }
 
-export function initialState(stage: Stage = "implement"): TaskState {
+export function initialState(stage: Stage = "plan"): TaskState {
   return { stage, status: "queued", reworks: 0, reason: null };
 }
 
 /**
  * 작업 상태 머신. 순수 함수이며 DB 갱신은 호출 측이 한다.
  *
- * implement → verify → (사람 merge) → release → (사람 배포 승인) → done
+ * plan → implement → verify → (사람 merge) → release → (사람 배포 승인) → done
  * operate 단계 작업은 한 번 실행하고 끝난다.
  */
 export function transition(state: TaskState, event: TaskEvent, maxReworks: number): TaskState {
@@ -80,6 +80,8 @@ export function transition(state: TaskState, event: TaskEvent, maxReworks: numbe
     case "stage_completed":
       if (state.status !== "running") return fail();
       switch (state.stage) {
+        case "plan":
+          return next({ stage: "implement", status: "queued" });
         case "implement":
           return next({ stage: "verify", status: "queued" });
         case "verify":

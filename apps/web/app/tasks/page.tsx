@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { HUMAN_STATUSES, STAGE_LABEL, STATUS_LABEL, type TaskStatus } from "@offai/core";
 import { getTasks, type TaskSummary } from "@/lib/data";
 import { formatDate, formatUsd } from "@/lib/format";
 
 export const metadata: Metadata = { title: "작업" };
+export const dynamic = "force-dynamic";
 
 const COLUMNS: { title: string; statuses: TaskStatus[] }[] = [
   { title: "대기", statuses: ["queued"] },
@@ -20,7 +22,7 @@ export default async function TasksPage() {
       <div className="page-head">
         <div>
           <h1>작업</h1>
-          <p className="muted">GitHub Issue 하나가 작업 하나입니다. Issue에 `offai` label을 붙이면 접수됩니다.</p>
+          <p className="muted">GitHub Issue 하나가 작업 하나입니다. 대상 레포의 Issue에 offai label을 붙이면 접수됩니다.</p>
         </div>
       </div>
 
@@ -53,16 +55,16 @@ export default async function TasksPage() {
 }
 
 function TaskCard({ task }: { task: TaskSummary }) {
-  const issueUrl = `https://github.com/${task.repo}/issues/${task.issueNumber}`;
   return (
     <li className="task">
       <div className="task__meta">
         <span className={`stage stage--${task.stage}`}>{STAGE_LABEL[task.stage]}</span>
         <span>{STATUS_LABEL[task.status]}</span>
       </div>
-      <a href={issueUrl} className="task__title" target="_blank" rel="noreferrer">
-        #{task.issueNumber} {task.title}
-      </a>
+      <Link href={`/tasks/${task.id}`} className="task__title">
+        {task.issueNumber !== null && `#${task.issueNumber} `}
+        {task.title}
+      </Link>
       {task.reason && <p className="task__reason">{task.reason}</p>}
       <div className="task__foot">
         <span>{task.repo}</span>

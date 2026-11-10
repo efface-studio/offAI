@@ -7,11 +7,13 @@ import {
   evaluateCommand,
   initialState,
   isProtectedBranch,
+  conditionalTeams,
+  listTeams,
   matchGlob,
-  needsSecurityReview,
   orgSchema,
   prBody,
   routeTask,
+  teamsForStage,
   transition,
   type TaskState,
 } from "./index";
@@ -23,8 +25,23 @@ describe("기본 조직", () => {
 
   it("팀장이 없는 팀은 거부한다", () => {
     const broken = structuredClone(DEFAULT_ORG);
-    broken.divisions[0]!.teams[0]!.roles = broken.divisions[0]!.teams[0]!.roles.map((role) => ({ ...role, lead: false }));
+    broken.divisions[0]!.teams[0]!.roles = broken.divisions[0]!.teams[0]!.roles.map((role) => ({ ...role, rank: "책임" as const }));
     expect(orgSchema.safeParse(broken).success).toBe(false);
+  });
+
+  it("단계마다 주 담당 팀이 있어야 한다", () => {
+    const broken = structuredClone(DEFAULT_ORG);
+    broken.divisions = broken.divisions.filter((division) => division.id !== "quality");
+    expect(orgSchema.safeParse(broken).success).toBe(false);
+  });
+
+  it("모든 팀에 팀장·책임·선임·사원이 있고 남녀가 섞여 있다", () => {
+    for (const { team } of listTeams(DEFAULT_ORG)) {
+      expect(team.roles.map((role) => role.rank)).toEqual(["팀장", "책임", "선임", "사원"]);
+      expect(new Set(team.roles.map((role) => role.person.gender)).size).toBe(2);
+    }
+    const teamNames = listTeams(DEFAULT_ORG).map(({ team }) => team.name);
+    expect(teamNames).toEqual(expect.arrayContaining(["기획팀", "디자인팀", "보안팀", "법무팀", "운영팀"]));
   });
 });
 
@@ -38,14 +55,20 @@ describe("라우팅", () => {
     expect(routeTask(DEFAULT_ORG, { stage: "implement", labels: [] }).team.id).toBe("web");
   });
 
-  it("검증 단계는 보안팀이 아니라 QA팀이 맡는다", () => {
+  it("검증 단계의 주 담당은 QA팀이고 보안·법무는 조건부로 붙는다", () => {
     expect(routeTask(DEFAULT_ORG, { stage: "verify", labels: ["🔒 security"] }).team.id).toBe("qa");
+    const ids = (changedFiles: string[], labels: string[] = []) =>
+      conditionalTeams(DEFAULT_ORG, { stage: "verify", labels, changedFiles }).map(({ team }) => team.id);
+    expect(ids(["app/auth/login.ts"])).toEqual(["security"]);
+    expect(ids(["package.json"])).toEqual(["legal"]);
+    expect(ids(["app/privacy/page.tsx", "src/proxy.ts"])).toEqual(["security", "legal"]);
+    expect(ids(["app/page.tsx"])).toEqual([]);
+    expect(ids([], ["⚖️ legal"])).toEqual(["legal"]);
   });
 
-  it("보안 경로가 바뀌면 보안 검토를 추가한다", () => {
-    expect(needsSecurityReview(DEFAULT_ORG, { stage: "verify", labels: [], changedFiles: ["app/auth/login.ts"] })).toBe(true);
-    expect(needsSecurityReview(DEFAULT_ORG, { stage: "verify", labels: [], changedFiles: ["app/page.tsx"] })).toBe(false);
-    expect(needsSecurityReview(DEFAULT_ORG, { stage: "verify", labels: ["🔒 security"] })).toBe(true);
+  it("기획 단계는 기획팀이 맡고 UI 작업이면 디자인팀이 함께한다", () => {
+    expect(teamsForStage(DEFAULT_ORG, { stage: "plan", labels: ["🖥️ web"] }).map(({ team }) => team.id)).toEqual(["product-planning", "design"]);
+    expect(teamsForStage(DEFAULT_ORG, { stage: "plan", labels: ["⚙️ backend"] }).map(({ team }) => team.id)).toEqual(["product-planning"]);
   });
 
   it("glob", () => {
@@ -61,8 +84,10 @@ describe("상태 머신", () => {
   const run = (state: TaskState, ...types: Parameters<typeof transition>[1][]) =>
     types.reduce((current, event) => transition(current, event, 2), state);
 
-  it("구현 → 검증 → merge 대기 → 릴리스 → 배포 승인 → 완료", () => {
+  it("기획 → 구현 → 검증 → merge 대기 → 릴리스 → 배포 승인 → 완료", () => {
     let state = run(initialState(), { type: "start" }, { type: "stage_completed" });
+    expect(state).toMatchObject({ stage: "implement", status: "queued" });
+    state = run(state, { type: "start" }, { type: "stage_completed" });
     expect(state).toMatchObject({ stage: "verify", status: "queued" });
     state = run(state, { type: "start" }, { type: "stage_completed" });
     expect(state.status).toBe("awaiting_merge");
