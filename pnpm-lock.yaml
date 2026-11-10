@@ -32,6 +32,9 @@ importers:
       '@offai/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@offai/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       next:
         specifier: 16.2.6
         version: 16.2.6(@opentelemetry/api@1.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
