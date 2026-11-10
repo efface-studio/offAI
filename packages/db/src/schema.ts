@@ -125,7 +125,7 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const REPORT_LEVELS = ["team", "division"] as const;
+export const REPORT_LEVELS = ["member", "team", "division"] as const;
 export type ReportLevel = (typeof REPORT_LEVELS)[number];
 
 /**
@@ -145,6 +145,8 @@ export const reports = pgTable(
     divisionId: text("division_id").notNull(),
     /** 본부 보고는 null */
     teamId: text("team_id"),
+    /** 팀원 보고일 때 보고한 직원 */
+    roleId: text("role_id"),
     outcome: text("outcome").$type<Report["outcome"]>().notNull(),
     summary: text("summary").notNull(),
     /** 인계용 상세 (Markdown) */
@@ -156,4 +158,28 @@ export const reports = pgTable(
     createdAt: createdAt(),
   },
   (table) => [index("reports_task_idx").on(table.taskId, table.createdAt), index("reports_created_idx").on(table.createdAt)],
+);
+
+export const ACTIVITY_KINDS = ["session_started", "member_joined", "delegated", "member_report", "tool", "lead_message", "policy", "session_finished"] as const;
+export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
+
+/** 세션 안에서 누가 무엇을 했는지 (작업 과정 상세 보기) */
+export const activities = pgTable(
+  "activities",
+  {
+    id: serial("id").primaryKey(),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    runId: uuid("run_id").references(() => runs.id, { onDelete: "cascade" }),
+    teamId: text("team_id").notNull(),
+    kind: text("kind").$type<ActivityKind>().notNull(),
+    /** 행동한 직원 (알 수 없으면 null) */
+    actorRoleId: text("actor_role_id"),
+    /** 지시를 받은 직원 등 상대 */
+    targetRoleId: text("target_role_id"),
+    detail: text("detail").notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [index("activities_task_idx").on(table.taskId, table.id), index("activities_run_idx").on(table.runId, table.id)],
 );
