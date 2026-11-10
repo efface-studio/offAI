@@ -4,8 +4,10 @@ export const REPO_PATH = "/workspace/repo";
 
 export type BriefInput = {
   stage: Stage;
-  /** 보안팀처럼 같은 단계 안에서 관점이 다른 검토 */
-  focus?: "security";
+  /** 조건부 참여 팀(보안·법무·디자인 등): 자기 역할 관점으로만 검토한다 */
+  reviewer?: { teamName: string };
+  /** 기획 단계에서 확정된 명세 */
+  spec: string;
   repo: string;
   issueNumber: number | null;
   title: string;
@@ -35,12 +37,35 @@ function issueBlock(input: BriefInput): string {
   ].join("\n");
 }
 
+function specBlock(input: BriefInput): string {
+  if (!input.spec) return "";
+  return ["## 기획 명세", "기획본부가 확정한 명세다. 수용 기준을 기준으로 작업한다.", quoted(input.spec)].join("\n");
+}
+
 const REPORT_RULE = "끝나면 report_result 도구를 정확히 한 번 호출해서 결과를 보고한다. 보고 전에 다른 마무리 메시지는 필요 없다.";
 
 export function buildBrief(input: BriefInput): string {
   const header = `레포 ${input.repo} 가 ${REPO_PATH} 에 checkout 되어 있다. 기본 브랜치는 ${input.baseBranch} 이다.`;
 
   switch (input.stage) {
+    case "plan": {
+      const focus = input.reviewer
+        ? `너는 ${input.reviewer.teamName}으로서 이 작업에 필요한 부분의 명세만 작성한다. 다른 팀의 명세는 기획팀이 쓴다.`
+        : "이 작업의 배경, 범위, 수용 기준을 담은 명세를 작성한다.";
+      return [
+        header,
+        "",
+        issueBlock(input),
+        "",
+        "## 기획 단계",
+        focus,
+        "1. 레포의 README, CLAUDE.md, 관련 코드를 읽고 현재 동작을 파악한다. 파일을 수정하지 않는다.",
+        "2. 명세를 report_result 의 spec 에 Markdown 으로 쓴다. 구현팀이 추측 없이 작업할 수 있을 만큼 구체적으로, 하지만 Issue 범위를 넘지 않게 쓴다.",
+        "3. 사람의 결정 없이는 진행할 수 없는 모호함이 있으면 outcome 을 blocked 로 하고 questions 에 질문을 적는다. 사소한 부분은 합리적인 기본값을 정하고 명세에 가정으로 적는다.",
+        `4. ${REPORT_RULE}`,
+      ].join("\n");
+    }
+
     case "implement": {
       const rework = input.findings.length > 0;
       const branchStep = rework
@@ -50,6 +75,8 @@ export function buildBrief(input: BriefInput): string {
         header,
         "",
         issueBlock(input),
+        "",
+        specBlock(input),
         "",
         rework ? `## 검증팀 수정 요청 (재작업 ${input.findings.length}건)\n${input.findings.map((item) => `- ${item}`).join("\n")}` : "",
         "",
@@ -67,14 +94,15 @@ export function buildBrief(input: BriefInput): string {
     }
 
     case "verify": {
-      const focus =
-        input.focus === "security"
-          ? "보안 관점(인가 우회, 입력 검증, XSS/injection, 시크릿 노출, 의존성)으로만 검토한다. 코드를 고치지 않는다."
-          : "Issue 요구사항을 하나씩 확인하고, lint/typecheck/test/build 를 실행하고, 빠진 테스트가 있으면 보강해서 커밋·push 한다. 기능 코드는 고치지 않는다.";
+      const focus = input.reviewer
+        ? `너는 ${input.reviewer.teamName}으로서 역할 지침의 관점으로만 검토한다. 코드를 고치지 않는다.`
+        : "명세의 수용 기준을 하나씩 확인하고, lint/typecheck/test/build 를 실행하고, 빠진 테스트가 있으면 보강해서 커밋·push 한다. 기능 코드는 고치지 않는다.";
       return [
         header,
         "",
         issueBlock(input),
+        "",
+        specBlock(input),
         "",
         `## 검증 대상: PR #${input.prNumber} (브랜치 ${input.branch}, checkout 되어 있음)`,
         `\`git diff origin/${input.baseBranch}...HEAD\` 로 변경분을 확인한다.`,

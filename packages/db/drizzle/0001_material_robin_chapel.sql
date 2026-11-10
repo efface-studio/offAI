@@ -1,0 +1,1 @@
+ALTER TABLE "tasks" ADD COLUMN "spec" text DEFAULT '' NOT NULL;

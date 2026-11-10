@@ -1,8 +1,6 @@
 import { DEFAULT_ORG, monthStart, orgSchema, routeTask, transition, type Org, type TaskEvent, type TaskState } from "@offai/core";
 import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
-import { fileURLToPath } from "node:url";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import * as schema from "./schema";
 
@@ -14,11 +12,6 @@ export type Db = PostgresJsDatabase<typeof schema>;
 export function createDb(url: string, options: { max?: number } = {}): { db: Db; close: () => Promise<void> } {
   const client = postgres(url, { max: options.max ?? 5 });
   return { db: drizzle(client, { schema }), close: () => client.end() };
-}
-
-/** packages/db/drizzle 의 마이그레이션을 적용한다 */
-export async function runMigrations(db: Db): Promise<void> {
-  await migrate(db, { migrationsFolder: fileURLToPath(new URL("../drizzle", import.meta.url)) });
 }
 
 /** 최신 조직 설정. 아직 저장된 적이 없으면 기본 조직을 돌려준다. */

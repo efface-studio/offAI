@@ -29,6 +29,8 @@ export const tasks = pgTable(
     teamId: text("team_id"),
     branch: text("branch"),
     prNumber: integer("pr_number"),
+    /** 기획 단계에서 만든 명세 (구현·검증 세션에 전달) */
+    spec: text("spec").notNull().default(""),
     /** 검증 단계에서 받은 수정 요청. 재구현 세션에 전달한다. */
     findings: jsonb("findings").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
     createdAt: createdAt(),

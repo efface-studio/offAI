@@ -5,12 +5,11 @@ import {
   branchTypeFor,
   checkDivisionBudget,
   evaluateCommand,
-  findTeam,
   initialState,
-  needsSecurityReview,
   prBody,
   prTitle,
   routeTask,
+  teamsForStage,
   transition,
   type Org,
   type Report,
@@ -66,7 +65,7 @@ export class Orchestrator {
 
     if (command.type === "enqueue") {
       const { org } = await loadOrg(db);
-      const team = routeTask(org, { stage: "implement", labels: command.labels });
+      const team = routeTask(org, { stage: "plan", labels: command.labels });
       const [task] = await db
         .insert(schema.tasks)
         .values({
@@ -77,7 +76,7 @@ export class Orchestrator {
           labels: command.labels,
           teamId: team.team.id,
           branch: branchName({ issueNumber: command.issueNumber, title: command.title, labels: command.labels }),
-          ...initialState("implement"),
+          ...initialState(),
         })
         .onConflictDoNothing()
         .returning();
@@ -177,7 +176,7 @@ export class Orchestrator {
 
     const results: { ref: TeamRef; result: RunResult }[] = [];
     for (const ref of teams) {
-      const result = await this.runTeam(task, ref, environmentId, baseBranch, teams.length > 1 && ref.team.id === "security");
+      const result = await this.runTeam(task, ref, environmentId, baseBranch);
       results.push({ ref, result });
       if (!result.ok) break;
     }
@@ -191,15 +190,13 @@ export class Orchestrator {
     await this.applyReports(task, reports, baseBranch);
   }
 
+  /** 주 담당 팀 + 조건부 팀 (검증 단계는 PR 변경 파일로 판단) */
   private async teamsFor(org: Org, task: Task): Promise<TeamRef[]> {
-    const primary = routeTask(org, { stage: task.stage, labels: task.labels });
-    if (task.stage !== "verify" || task.prNumber === null) return [primary];
-    const changedFiles = await this.deps.github.changedFiles(task.repo, task.prNumber);
-    const security = findTeam(org, "security");
-    return security && needsSecurityReview(org, { stage: "verify", labels: task.labels, changedFiles }) ? [primary, security] : [primary];
+    const changedFiles = task.stage === "verify" && task.prNumber !== null ? await this.deps.github.changedFiles(task.repo, task.prNumber) : [];
+    return teamsForStage(org, { stage: task.stage, labels: task.labels, changedFiles });
   }
 
-  private async runTeam(task: Task, ref: TeamRef, environmentId: string, baseBranch: string, securityFocus: boolean): Promise<RunResult> {
+  private async runTeam(task: Task, ref: TeamRef, environmentId: string, baseBranch: string): Promise<RunResult> {
     const { db, anthropic, github, config, log } = this.deps;
 
     const spend = await monthlySpendByDivision(db);
@@ -224,7 +221,8 @@ export class Orchestrator {
 
     const brief = buildBrief({
       stage: task.stage,
-      ...(securityFocus ? { focus: "security" as const } : {}),
+      ...(ref.team.assignment === "conditional" ? { reviewer: { teamName: ref.team.name } } : {}),
+      spec: task.spec,
       repo: task.repo,
       issueNumber: task.issueNumber,
       title: task.title,
@@ -325,11 +323,30 @@ export class Orchestrator {
     const { github, config } = this.deps;
     const blocked = reports.find((item) => item.report.outcome === "blocked");
     if (blocked) {
+      const questions = blocked.report.questions;
+      if (questions.length > 0) {
+        await this.safeComment(task, `${blocked.ref.team.name}에서 확인이 필요한 질문이 있습니다. Issue에 답을 남긴 뒤 offAI 콘솔에서 다시 시도해 주세요.\n\n${questions.map((q) => `- ${q}`).join("\n")}`);
+      }
       await this.escalate(task.id, `${blocked.ref.team.name} 진행 불가: ${blocked.report.summary}`);
       return;
     }
 
     switch (task.stage) {
+      case "plan": {
+        const spec = reports
+          .filter((item) => item.report.spec.trim())
+          .map((item) => `### ${item.ref.team.name}\n\n${item.report.spec.trim()}`)
+          .join("\n\n");
+        if (!spec) {
+          await this.escalate(task.id, "기획 명세가 비어 있습니다");
+          return;
+        }
+        await this.deps.db.update(schema.tasks).set({ spec }).where(eq(schema.tasks.id, task.id));
+        await this.safeComment(task, `## 기획 명세\n\n${spec}\n\n---\n이 명세로 구현을 시작합니다.`);
+        await this.apply(task, { type: "stage_completed" }, "기획", "명세 확정 → 구현 대기");
+        return;
+      }
+
       case "implement": {
         const report = reports[0]!.report;
         if (!task.branch || !(await github.branchExists(task.repo, task.branch))) {

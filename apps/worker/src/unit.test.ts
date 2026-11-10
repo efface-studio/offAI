@@ -69,7 +69,7 @@ describe("에이전트 설정", () => {
   });
 
   it("읽기 전용 역할은 read/glob/grep 만 켠다", () => {
-    const reviewer = ref.team.roles.find((role) => role.id === "web-reviewer")!;
+    const reviewer = ref.team.roles.find((role) => role.id === "web-explorer")!;
     const toolset = toolsetFor(reviewer);
     expect(toolset).toMatchObject({ default_config: { enabled: false } });
     expect(JSON.stringify(toolset)).not.toContain("bash");
@@ -111,6 +111,7 @@ describe("브리프", () => {
     findings: [],
     commitType: "feat",
     gitmoji: "✨",
+    spec: "",
   };
 
   it("Issue 본문은 자료 블록에 가두고 블록을 닫는 문자열을 무력화한다", () => {
@@ -129,10 +130,22 @@ describe("브리프", () => {
     expect(brief).not.toContain("git checkout -b");
   });
 
-  it("보안 검토 브리프는 보안 관점만 본다", () => {
-    const brief = buildBrief({ ...base, stage: "verify", prNumber: 3, focus: "security" });
-    expect(brief).toContain("보안 관점");
+  it("조건부 팀의 검증 브리프는 자기 역할 관점만 본다", () => {
+    const brief = buildBrief({ ...base, stage: "verify", prNumber: 3, reviewer: { teamName: "법무팀" } });
+    expect(brief).toContain("법무팀으로서 역할 지침의 관점으로만");
     expect(brief).toContain("PR #3");
+  });
+
+  it("기획 브리프는 파일을 고치지 않고 명세와 질문을 요구한다", () => {
+    const brief = buildBrief({ ...base, stage: "plan", branch: null });
+    expect(brief).toContain("파일을 수정하지 않는다");
+    expect(brief).toContain("questions");
+  });
+
+  it("구현 브리프에 기획 명세를 자료로 넣는다", () => {
+    const brief = buildBrief({ ...base, spec: "- [ ] footer 링크가 /contact 로 이동" });
+    expect(brief).toContain("## 기획 명세");
+    expect(brief).toContain("footer 링크가 /contact 로 이동");
   });
 
   it("운영 브리프는 push 를 금지한다", () => {

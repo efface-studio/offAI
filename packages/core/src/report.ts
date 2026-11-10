@@ -21,6 +21,10 @@ export const reportSchema = z.object({
     .max(5)
     .default([]),
   notes: z.array(z.string().max(300)).max(10).default([]),
+  /** 기획 단계: 구현팀에 넘길 명세 (Markdown) */
+  spec: z.string().max(8000).default(""),
+  /** 기획 단계: 요구사항이 불분명할 때 Issue 작성자에게 물을 질문 */
+  questions: z.array(z.string().max(500)).max(10).default([]),
 });
 export type Report = z.infer<typeof reportSchema>;
 
@@ -51,5 +55,7 @@ export const REPORT_TOOL_INPUT_SCHEMA = {
       description: "새로 만들 Issue 초안",
     },
     notes: { type: "array", items: { type: "string" } },
+    spec: { type: "string", description: "기획 단계: 구현팀에 넘길 명세 (Markdown, 한국어)" },
+    questions: { type: "array", items: { type: "string" }, description: "기획 단계: 사람에게 확인할 질문 (outcome 은 blocked)" },
   },
 } as const;

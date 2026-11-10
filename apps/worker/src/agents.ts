@@ -39,7 +39,7 @@ export function toolsetFor(role: Role): AgentTools[number] {
 
 function systemPrompt(division: Division, team: Team, role: Role): string {
   return [
-    `너는 efface의 AI 조직에서 ${division.name} ${team.name}의 ${role.name} 역할을 맡는다.`,
+    `너는 efface AI 조직 ${division.name} ${team.name}의 ${role.rank} ${role.person.name}이고, ${role.name} 업무를 맡는다.`,
     `책임: ${role.responsibility}`,
     "",
     role.instructions,
@@ -51,7 +51,7 @@ function systemPrompt(division: Division, team: Team, role: Role): string {
 export function memberConfig(division: Division, team: Team, role: Role): AgentCreateParams {
   return {
     name: `offai/${team.id}/${role.id}`,
-    description: `${team.name} ${role.name}: ${role.responsibility}`,
+    description: `${team.name} ${role.rank} ${role.person.name} (${role.name}): ${role.responsibility}`,
     model: { id: role.model, effort: role.effort },
     system: systemPrompt(division, team, role),
     tools: [toolsetFor(role)],
