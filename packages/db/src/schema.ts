@@ -124,3 +124,36 @@ export const settings = pgTable("settings", {
   value: text("value").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const REPORT_LEVELS = ["team", "division"] as const;
+export type ReportLevel = (typeof REPORT_LEVELS)[number];
+
+/**
+ * 팀·본부 보고. 팀 세션이 끝나면 팀 보고, 단계가 끝나면 참여 본부별 종합 보고를 남긴다.
+ * 다음 단계 팀의 브리프에 인계 자료로 들어간다.
+ */
+export const reports = pgTable(
+  "reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    runId: uuid("run_id").references(() => runs.id, { onDelete: "set null" }),
+    level: text("level").$type<ReportLevel>().notNull(),
+    stage: text("stage").$type<Stage>().notNull(),
+    divisionId: text("division_id").notNull(),
+    /** 본부 보고는 null */
+    teamId: text("team_id"),
+    outcome: text("outcome").$type<Report["outcome"]>().notNull(),
+    summary: text("summary").notNull(),
+    /** 인계용 상세 (Markdown) */
+    body: text("body").notNull().default(""),
+    /** 다음에 일을 넘겨받는 팀 (없으면 사람 또는 종료) */
+    nextTeamId: text("next_team_id"),
+    /** 다음 담당이 사람일 때 설명 (merge, 배포 등) */
+    nextHuman: text("next_human"),
+    createdAt: createdAt(),
+  },
+  (table) => [index("reports_task_idx").on(table.taskId, table.createdAt), index("reports_created_idx").on(table.createdAt)],
+);

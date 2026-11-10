@@ -7,6 +7,7 @@ const LINKS = [
   { href: "/", label: "조직도" },
   { href: "/office", label: "자리 배치도" },
   { href: "/tasks", label: "작업" },
+  { href: "/reports", label: "보고" },
   { href: "/approvals", label: "승인함" },
   { href: "/settings", label: "설정" },
 ] as const;

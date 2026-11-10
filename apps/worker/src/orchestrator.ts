@@ -1,6 +1,11 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import {
   GITMOJI,
+  OUTCOME_LABEL,
+  buildHandoff,
+  findTeam,
+  nextStep,
+  reportBody,
   branchName,
   branchTypeFor,
   checkDivisionBudget,
@@ -176,7 +181,7 @@ export class Orchestrator {
 
     const results: { ref: TeamRef; result: RunResult }[] = [];
     for (const ref of teams) {
-      const result = await this.runTeam(task, ref, environmentId, baseBranch);
+      const result = await this.runTeam(org, task, ref, environmentId, baseBranch);
       results.push({ ref, result });
       if (!result.ok) break;
     }
@@ -184,10 +189,77 @@ export class Orchestrator {
     const failed = results.find((item) => !item.result.ok);
     if (failed && !failed.result.ok) {
       await this.escalate(task.id, `${failed.ref.team.name}: ${failed.result.error}`);
+      await this.reportDivisions(org, task, results);
       return;
     }
     const reports = results.map((item) => ({ ref: item.ref, report: (item.result as Extract<RunResult, { ok: true }>).report }));
     await this.applyReports(task, reports, baseBranch);
+    await this.reportDivisions(org, task, results);
+  }
+
+  /**
+   * 단계가 끝나면 참여한 본부마다 종합 보고를 남긴다 (본부장 명의).
+   * 다음 담당(팀 또는 사람)을 함께 적어 본부 사이의 인계를 드러낸다.
+   */
+  private async reportDivisions(org: Org, task: Task, results: { ref: TeamRef; result: RunResult }[]): Promise<void> {
+    const { db } = this.deps;
+    const [current] = await db.select().from(schema.tasks).where(eq(schema.tasks.id, task.id));
+    if (!current) return;
+    const next = nextStep(org, { stage: current.stage, status: current.status, reworks: current.reworks, reason: current.reason }, current.labels);
+    const nextLabel = next.teamId ? (findTeam(org, next.teamId)?.team.name ?? next.teamId) : (next.human ?? "완료");
+
+    const byDivision = new Map<string, { ref: TeamRef; result: RunResult }[]>();
+    for (const item of results) {
+      const list = byDivision.get(item.ref.division.id) ?? [];
+      list.push(item);
+      byDivision.set(item.ref.division.id, list);
+    }
+
+    for (const items of byDivision.values()) {
+      const division = items[0]!.ref.division;
+      const outcomes = items.map((item) => (item.result.ok ? item.result.report.outcome : "blocked"));
+      const outcome = outcomes.includes("blocked") ? "blocked" : outcomes.includes("changes_requested") ? "changes_requested" : "completed";
+      const lines = items.map((item) =>
+        item.result.ok
+          ? `- ${item.ref.team.name}: ${OUTCOME_LABEL[item.result.report.outcome]} — ${item.result.report.summary}`
+          : `- ${item.ref.team.name}: 진행 불가 — ${item.result.error}`,
+      );
+      const summary = `${items.map((item) => item.ref.team.name).join("·")} ${OUTCOME_LABEL[outcome]} → ${nextLabel}`;
+      await db.insert(schema.reports).values({
+        taskId: task.id,
+        level: "division",
+        stage: task.stage,
+        divisionId: division.id,
+        outcome,
+        summary,
+        body: lines.join("\n"),
+        nextTeamId: next.teamId,
+        nextHuman: next.human,
+      });
+      await addTaskEvent(db, task.id, `${division.name} ${division.head.name} 본부장`, `본부 보고: ${summary}`);
+    }
+  }
+
+  /** 앞 팀들의 보고로 인계 자료를 만든다 */
+  private async handoffFor(org: Org, taskId: string): Promise<string> {
+    const prior = await this.deps.db
+      .select()
+      .from(schema.reports)
+      .where(and(eq(schema.reports.taskId, taskId), eq(schema.reports.level, "team")))
+      .orderBy(schema.reports.createdAt);
+    return buildHandoff(
+      prior.map((row) => {
+        const ref = row.teamId ? findTeam(org, row.teamId) : undefined;
+        return {
+          stage: row.stage,
+          teamName: ref?.team.name ?? row.teamId ?? "-",
+          divisionName: ref?.division.name ?? row.divisionId,
+          outcome: row.outcome,
+          summary: row.summary,
+          body: row.body,
+        };
+      }),
+    );
   }
 
   /** 주 담당 팀 + 조건부 팀 (검증 단계는 PR 변경 파일로 판단) */
@@ -196,7 +268,7 @@ export class Orchestrator {
     return teamsForStage(org, { stage: task.stage, labels: task.labels, changedFiles });
   }
 
-  private async runTeam(task: Task, ref: TeamRef, environmentId: string, baseBranch: string): Promise<RunResult> {
+  private async runTeam(org: Org, task: Task, ref: TeamRef, environmentId: string, baseBranch: string): Promise<RunResult> {
     const { db, anthropic, github, config, log } = this.deps;
 
     const spend = await monthlySpendByDivision(db);
@@ -205,7 +277,18 @@ export class Orchestrator {
       spentThisMonthCents: spend.get(ref.division.id) ?? 0,
       sessionBudgetCents: ref.team.sessionBudgetCents,
     });
-    if (!budget.ok) return { ok: false, sessionId: null, error: budget.reason, costCents: 0 };
+    if (!budget.ok) {
+      await db.insert(schema.reports).values({
+        taskId: task.id,
+        level: "team",
+        stage: task.stage,
+        divisionId: ref.division.id,
+        teamId: ref.team.id,
+        outcome: "blocked",
+        summary: budget.reason,
+      });
+      return { ok: false, sessionId: null, error: budget.reason, costCents: 0 };
+    }
 
     const [run] = await db
       .insert(schema.runs)
@@ -223,6 +306,7 @@ export class Orchestrator {
       stage: task.stage,
       ...(ref.team.assignment === "conditional" ? { reviewer: { teamName: ref.team.name } } : {}),
       spec: task.spec,
+      handoff: await this.handoffFor(org, task.id),
       repo: task.repo,
       issueNumber: task.issueNumber,
       title: task.title,
@@ -271,7 +355,24 @@ export class Orchestrator {
         finishedAt: new Date(),
       })
       .where(eq(schema.runs.id, run.id));
-    await addTaskEvent(db, task.id, ref.team.name, result.ok ? `보고: ${result.report.summary}` : `실패: ${result.error}`);
+    await db.insert(schema.reports).values({
+      taskId: task.id,
+      runId: run.id,
+      level: "team",
+      stage: task.stage,
+      divisionId: ref.division.id,
+      teamId: ref.team.id,
+      outcome: result.ok ? result.report.outcome : "blocked",
+      summary: result.ok ? result.report.summary : result.error,
+      body: result.ok ? reportBody(result.report) : "",
+    });
+    const lead = ref.team.roles.find((role) => role.rank === "팀장");
+    await addTaskEvent(
+      db,
+      task.id,
+      `${ref.team.name}${lead ? ` ${lead.person.name} 팀장` : ""}`,
+      result.ok ? `팀 보고(${OUTCOME_LABEL[result.report.outcome]}): ${result.report.summary}` : `팀 보고(진행 불가): ${result.error}`,
+    );
     return result;
   }
 

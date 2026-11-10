@@ -112,6 +112,7 @@ describe("브리프", () => {
     commitType: "feat",
     gitmoji: "✨",
     spec: "",
+    handoff: "",
   };
 
   it("Issue 본문은 자료 블록에 가두고 블록을 닫는 문자열을 무력화한다", () => {
@@ -140,6 +141,13 @@ describe("브리프", () => {
     const brief = buildBrief({ ...base, stage: "plan", branch: null });
     expect(brief).toContain("파일을 수정하지 않는다");
     expect(brief).toContain("questions");
+  });
+
+  it("앞 팀 보고가 있으면 인계 섹션으로 넣는다", () => {
+    expect(buildBrief(base)).not.toContain("이전 팀 보고");
+    const brief = buildBrief({ ...base, stage: "verify", prNumber: 3, handoff: "### [구현] 제품개발본부 Web팀 — 완료\n\nfooter 수정" });
+    expect(brief).toContain("## 이전 팀 보고 (인계)");
+    expect(brief).toContain("footer 수정");
   });
 
   it("구현 브리프에 기획 명세를 자료로 넣는다", () => {

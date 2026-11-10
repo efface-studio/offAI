@@ -3,6 +3,8 @@ import {
   DEFAULT_ORG,
   InvalidTransitionError,
   branchName,
+  buildHandoff,
+  nextStep,
   checkDivisionBudget,
   evaluateCommand,
   initialState,
@@ -207,5 +209,35 @@ describe("예산", () => {
       ok: true,
       remainingCents: 100,
     });
+  });
+});
+
+describe("인계", () => {
+  const entry = (summary: string, body = "") => ({
+    stage: "plan" as const,
+    teamName: "기획팀",
+    divisionName: "기획본부",
+    outcome: "completed" as const,
+    summary,
+    body,
+  });
+
+  it("앞 팀 보고를 단계·본부·팀 순서로 묶는다", () => {
+    const text = buildHandoff([entry("명세 확정", "**변경**\n- 없음")]);
+    expect(text).toContain("### [기획] 기획본부 기획팀 — 완료");
+    expect(text).toContain("명세 확정");
+  });
+
+  it("길면 오래된 보고부터 본문을 뺀다", () => {
+    const text = buildHandoff([entry("첫 보고", "x".repeat(500)), entry("둘째 보고", "y".repeat(100))], 300);
+    expect(text).toContain("첫 보고");
+    expect(text).not.toContain("xxxx");
+    expect(text).toContain("yyyy");
+  });
+
+  it("다음 담당은 팀 또는 사람이다", () => {
+    expect(nextStep(DEFAULT_ORG, { stage: "implement", status: "queued", reworks: 0, reason: null }, ["⚙️ backend"])).toEqual({ teamId: "backend", human: null });
+    expect(nextStep(DEFAULT_ORG, { stage: "verify", status: "awaiting_merge", reworks: 0, reason: null }, []).human).toContain("merge");
+    expect(nextStep(DEFAULT_ORG, { stage: "plan", status: "escalated", reworks: 0, reason: "질문" }, []).human).toContain("질문");
   });
 });

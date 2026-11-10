@@ -1,6 +1,6 @@
 import "server-only";
 import { DEFAULT_ORG, type Org, type Report, type Stage, type TaskStatus } from "@offai/core";
-import { desc, eq, inArray, loadOrg, monthlySpendByDivision, schema, sql } from "@offai/db";
+import { and, desc, eq, gte, inArray, loadOrg, monthlySpendByDivision, schema, sql } from "@offai/db";
 import { getDb } from "./db";
 
 export type TaskSummary = {
@@ -163,4 +163,111 @@ export async function getTeamActivity(): Promise<Map<string, TeamActivity>> {
     activity.set(row.teamId, { state, taskId: row.id, taskTitle: row.title });
   }
   return activity;
+}
+
+export type ReportItem = {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  issueNumber: number | null;
+  level: "team" | "division";
+  stage: Stage;
+  divisionId: string;
+  teamId: string | null;
+  outcome: Report["outcome"];
+  summary: string;
+  body: string;
+  nextTeamId: string | null;
+  nextHuman: string | null;
+  createdAt: Date;
+};
+
+const reportColumns = {
+  id: schema.reports.id,
+  taskId: schema.reports.taskId,
+  taskTitle: schema.tasks.title,
+  issueNumber: schema.tasks.issueNumber,
+  level: schema.reports.level,
+  stage: schema.reports.stage,
+  divisionId: schema.reports.divisionId,
+  teamId: schema.reports.teamId,
+  outcome: schema.reports.outcome,
+  summary: schema.reports.summary,
+  body: schema.reports.body,
+  nextTeamId: schema.reports.nextTeamId,
+  nextHuman: schema.reports.nextHuman,
+  createdAt: schema.reports.createdAt,
+};
+
+export async function getRecentReports(limit = 100): Promise<ReportItem[]> {
+  const db = getDb();
+  if (!db) return [];
+  return db
+    .select(reportColumns)
+    .from(schema.reports)
+    .innerJoin(schema.tasks, eq(schema.tasks.id, schema.reports.taskId))
+    .orderBy(desc(schema.reports.createdAt))
+    .limit(limit);
+}
+
+export async function getTaskReports(taskId: string): Promise<ReportItem[]> {
+  const db = getDb();
+  if (!db || !/^[0-9a-f-]{36}$/i.test(taskId)) return [];
+  return db
+    .select(reportColumns)
+    .from(schema.reports)
+    .innerJoin(schema.tasks, eq(schema.tasks.id, schema.reports.taskId))
+    .where(eq(schema.reports.taskId, taskId))
+    .orderBy(schema.reports.createdAt);
+}
+
+export type DivisionWeek = {
+  sessions: number;
+  costCents: number;
+  completed: number;
+  changesRequested: number;
+  blocked: number;
+  latest: ReportItem | null;
+};
+
+/** 최근 7일 본부별 현황 */
+export async function getDivisionWeek(now = new Date()): Promise<Map<string, DivisionWeek>> {
+  const db = getDb();
+  const result = new Map<string, DivisionWeek>();
+  if (!db) return result;
+  const since = new Date(now.getTime() - 7 * 24 * 3_600_000);
+  const empty = (): DivisionWeek => ({ sessions: 0, costCents: 0, completed: 0, changesRequested: 0, blocked: 0, latest: null });
+
+  const runs = await db
+    .select({ divisionId: schema.runs.divisionId, sessions: sql<number>`count(*)::int`, cost: sql<number>`coalesce(sum(${schema.runs.costCents}), 0)::int` })
+    .from(schema.runs)
+    .where(gte(schema.runs.startedAt, since))
+    .groupBy(schema.runs.divisionId);
+  for (const row of runs) result.set(row.divisionId, { ...empty(), sessions: row.sessions, costCents: row.cost });
+
+  const outcomes = await db
+    .select({ divisionId: schema.reports.divisionId, outcome: schema.reports.outcome, count: sql<number>`count(*)::int` })
+    .from(schema.reports)
+    .where(and(eq(schema.reports.level, "team"), gte(schema.reports.createdAt, since)))
+    .groupBy(schema.reports.divisionId, schema.reports.outcome);
+  for (const row of outcomes) {
+    const week = result.get(row.divisionId) ?? empty();
+    if (row.outcome === "completed") week.completed += row.count;
+    else if (row.outcome === "changes_requested") week.changesRequested += row.count;
+    else week.blocked += row.count;
+    result.set(row.divisionId, week);
+  }
+
+  const latest = await db
+    .selectDistinctOn([schema.reports.divisionId], reportColumns)
+    .from(schema.reports)
+    .innerJoin(schema.tasks, eq(schema.tasks.id, schema.reports.taskId))
+    .where(and(eq(schema.reports.level, "division"), gte(schema.reports.createdAt, since)))
+    .orderBy(schema.reports.divisionId, desc(schema.reports.createdAt));
+  for (const row of latest) {
+    const week = result.get(row.divisionId) ?? empty();
+    week.latest = row;
+    result.set(row.divisionId, week);
+  }
+  return result;
 }
