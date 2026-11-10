@@ -291,6 +291,8 @@ export class Orchestrator {
       return { result: "deny", message: `offAI 정책: ${policy.reason}. 다른 방법을 쓰거나 report_result 로 blocked 를 보고하세요.` };
     }
 
+    // 화면에 승인 요청이 보일 때는 작업도 이미 '승인 대기'여야 하므로 상태를 먼저 바꾼다
+    await this.applyById(taskId, { type: "approval_requested" }, "정책", `사람 확인 요청: ${policy.reason}`);
     const [run] = await db.select({ sessionId: schema.runs.sessionId }).from(schema.runs).where(eq(schema.runs.id, runId));
     const [approval] = await db
       .insert(schema.approvals)
@@ -299,9 +301,10 @@ export class Orchestrator {
       .returning();
     const approvalId =
       approval?.id ?? (await db.select({ id: schema.approvals.id }).from(schema.approvals).where(eq(schema.approvals.toolUseId, event.id)))[0]?.id;
-    if (!approvalId) return { result: "deny", message: "승인 요청을 기록하지 못했습니다" };
-
-    await this.applyById(taskId, { type: "approval_requested" }, "정책", `사람 확인 요청: ${policy.reason}`);
+    if (!approvalId) {
+      await this.applyById(taskId, { type: "approval_resolved" }, "offai", "승인 요청 기록 실패로 거부");
+      return { result: "deny", message: "승인 요청을 기록하지 못했습니다" };
+    }
 
     const started = Date.now();
     while (Date.now() - started < APPROVAL_TIMEOUT_MS) {
