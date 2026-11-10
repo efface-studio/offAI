@@ -200,6 +200,9 @@ describe.skipIf(!url)("작업 흐름 (Postgres)", () => {
     await step(); // 릴리스
     expect(await currentTask()).toMatchObject({ stage: "release", status: "awaiting_deploy" });
     expect(github.comments.at(-1)?.body).toContain("production 배포 요청");
+    // ✨ feature 작업이라 마케팅팀이 배포 준비에 참여한다
+    expect(github.comments.at(-1)?.body).toContain("### 마케팅팀");
+    expect(calls.filter((call) => call.stage === "release").map((call) => call.team)).toEqual(["release", "marketing"]);
 
     await orchestrator.applyById(task.id, { type: "deploy_approved" }, "xixn2");
     expect((await currentTask()).status).toBe("done");

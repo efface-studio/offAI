@@ -392,12 +392,17 @@ export class Orchestrator {
       }
 
       case "release": {
-        const report = reports[0]!.report;
+        const [primary, ...others] = reports;
+        const report = primary!.report;
+        // 마케팅팀처럼 배포 준비에 조건부로 참여한 팀의 결과물을 요청서 뒤에 붙인다
+        const extras = others
+          .map((item) => `### ${item.ref.team.name}\n\n${item.report.summary}\n\n${list("내용", item.report.notes)}`)
+          .join("\n");
         const target = task.prNumber ?? task.issueNumber;
         if (target !== null) {
           await this.safeComment(
             { ...task, issueNumber: target },
-            `production 배포 요청\n\n${report.summary}\n\n${list("변경", report.changes)}${list("확인", report.verification)}${list("위험·롤백", report.notes)}\noffAI 콘솔에서 배포 승인을 기록하면 작업이 완료됩니다.`,
+            `production 배포 요청\n\n${report.summary}\n\n${list("변경", report.changes)}${list("확인", report.verification)}${list("위험·롤백", report.notes)}${extras ? `${extras}\n` : ""}\noffAI 콘솔에서 배포 승인을 기록하면 작업이 완료됩니다.`,
           );
         }
         await this.apply(task, { type: "stage_completed" }, "릴리스", "배포 요청서 작성 → 사람 배포 승인 대기");

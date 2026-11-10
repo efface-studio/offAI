@@ -113,6 +113,20 @@ export function buildBrief(input: BriefInput): string {
     }
 
     case "release":
+      if (input.reviewer) {
+        return [
+          header,
+          "",
+          issueBlock(input),
+          "",
+          specBlock(input),
+          "",
+          `## 배포 준비 참여: PR #${input.prNumber} 가 ${input.baseBranch} 에 merge 되었다.`,
+          `너는 ${input.reviewer.teamName}으로서 역할 지침의 관점에서 이번 출시에 필요한 결과물을 만든다.`,
+          "`git log` 와 변경된 파일로 실제 반영된 내용만 근거로 쓴다. 파일을 수정하거나 커밋하지 않고, 배포 명령을 실행하지 않는다.",
+          `${REPORT_RULE} 결과물은 summary 와 notes 에 쓴다.`,
+        ].join("\n");
+      }
       return [
         header,
         "",
