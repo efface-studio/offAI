@@ -15,6 +15,13 @@
       "when": 1794290080583,
       "tag": "0001_material_robin_chapel",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794291283513,
+      "tag": "0002_loving_ricochet",
+      "breakpoints": true
     }
   ]
 }
