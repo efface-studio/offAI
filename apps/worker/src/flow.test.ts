@@ -112,7 +112,7 @@ describe.skipIf(!url)("작업 흐름 (Postgres)", () => {
   });
 
   beforeEach(async () => {
-    await db.execute(sql`truncate table reports, task_events, approvals, runs, tasks, agents, settings, org_versions restart identity cascade`);
+    await db.execute(sql`truncate table activities, reports, task_events, approvals, runs, tasks, agents, settings, org_versions restart identity cascade`);
     const version = await saveOrg(db, DEFAULT_ORG, "test");
     await setSetting(db, SYNCED_ORG_SETTING, String(version));
     await setSetting(db, ENVIRONMENT_SETTING, "env_test");
@@ -265,6 +265,45 @@ describe.skipIf(!url)("작업 흐름 (Postgres)", () => {
     await step();
     expect(decisions).toEqual(["allow", "deny", "allow"]);
     expect(await currentTask()).toMatchObject({ stage: "verify", status: "queued" });
+  });
+
+  it("세션 안의 팀원 투입·지시·명령·보고를 직원 단위로 기록한다", async () => {
+    await orchestrator.handleWebhook({ type: "enqueue", repo: REPO, issueNumber: 12, title: "Activity", body: "", labels: ["🖥️ web"] });
+    scripts = { plan: async () => report("completed", { spec: "명세" }) };
+    await step();
+    scripts = {
+      implement: async (_input, hooks) => {
+        await hooks.onActivity({ kind: "member_joined", threadId: "sthr_1", agentName: "offai/web/web-engineer" });
+        await hooks.onActivity({ kind: "delegated", threadId: "sthr_1", agentName: "offai/web/web-engineer", text: "footer 링크를 /contact 로 바꿔 주세요" });
+        await hooks.onActivity({ kind: "tool", threadId: null, tool: "read", input: { file_path: "app/footer.tsx" } });
+        await hooks.onActivity({ kind: "tool", threadId: "sthr_1", tool: "bash", input: { command: "pnpm test" } });
+        await hooks.decideTool({ id: "tu_9", name: "bash", input: { command: "git push origin main" }, threadId: "sthr_1" });
+        await hooks.onActivity({ kind: "member_report", threadId: "sthr_1", agentName: "offai/web/web-engineer", text: "footer 수정 완료\n테스트 통과" });
+        github.branches.add("feat/12-activity");
+        return report("completed");
+      },
+    };
+    await step();
+
+    const rows = await db.select().from(schema.activities).orderBy(schema.activities.id);
+    const implementRows = rows.filter((row) => row.teamId === "web");
+    expect(implementRows.map((row) => [row.kind, row.actorRoleId, row.targetRoleId])).toEqual([
+      ["session_started", "web-lead", null],
+      ["member_joined", "web-engineer", null],
+      ["delegated", "web-lead", "web-engineer"],
+      ["tool", "web-lead", null],
+      ["tool", "web-engineer", null],
+      ["policy", "web-engineer", null],
+      ["member_report", "web-engineer", "web-lead"],
+      ["session_finished", "web-lead", null],
+    ]);
+    expect(implementRows[3]!.detail).toBe("파일 읽기 app/footer.tsx");
+    expect(implementRows[4]!.detail).toBe("$ pnpm test");
+    expect(implementRows[5]!.detail).toContain("main 직접 push 금지");
+
+    const memberReports = await db.select().from(schema.reports).where(eq(schema.reports.level, "member"));
+    expect(memberReports).toHaveLength(1);
+    expect(memberReports[0]).toMatchObject({ roleId: "web-engineer", teamId: "web", summary: "footer 수정 완료" });
   });
 
   it("브랜치를 push 하지 않으면 PR 없이 사람에게 넘긴다", async () => {

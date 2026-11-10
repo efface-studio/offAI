@@ -8,11 +8,20 @@ type ToolUseEvent = Anthropic.Beta.Sessions.BetaManagedAgentsAgentToolUseEvent |
 
 export type ToolDecision = { result: "allow" | "deny"; message?: string };
 
+/** 세션 안에서 일어난 일 (누가 무엇을). threadId 로 팀원을 구분한다. */
+export type SessionActivity =
+  | { kind: "member_joined"; threadId: string; agentName: string }
+  | { kind: "delegated"; threadId: string; agentName: string | null; text: string }
+  | { kind: "member_report"; threadId: string; agentName: string | null; text: string }
+  | { kind: "tool"; threadId: string | null; tool: string; input: Record<string, unknown> }
+  | { kind: "lead_message"; text: string };
+
 export type RunHooks = {
   onSession(sessionId: string): Promise<void>;
   /** 멈춘 도구 호출을 판정한다. 사람 승인을 기다리는 동안 resolve 되지 않을 수 있다. */
   decideTool(event: { id: string; name: string; input: Record<string, unknown>; threadId: string | null }): Promise<ToolDecision>;
   onCost(costCents: number): Promise<void>;
+  onActivity(activity: SessionActivity): Promise<void>;
   log(message: string): void;
 };
 
@@ -33,6 +42,16 @@ export type RunResult =
   | { ok: false; sessionId: string | null; error: string; costCents: number };
 
 /** list_cost.amount 를 센트로 바꾼다 (정수 문자열이면 이미 센트) */
+type ContentBlock = { type: string; text?: string };
+
+function textOf(content: readonly ContentBlock[]): string {
+  return content
+    .filter((block) => block.type === "text" && typeof block.text === "string")
+    .map((block) => block.text)
+    .join("\n")
+    .trim();
+}
+
 export function costToCents(amount: string): number {
   if (/^\d+$/.test(amount)) return Number.parseInt(amount, 10);
   const value = Number.parseFloat(amount);
@@ -100,8 +119,31 @@ export async function runSession(client: Anthropic, input: RunInput, hooks: RunH
     switch (event.type) {
       case "agent.tool_use":
       case "agent.mcp_tool_use":
+        await hooks.onActivity({ kind: "tool", threadId: event.session_thread_id ?? null, tool: event.name, input: event.input });
         if (event.evaluated_permission === "ask") await answerTool(event);
         return null;
+
+      case "session.thread_created":
+        await hooks.onActivity({ kind: "member_joined", threadId: event.session_thread_id, agentName: event.agent_name });
+        return null;
+
+      case "agent.thread_message_sent": {
+        const text = textOf(event.content);
+        if (text) await hooks.onActivity({ kind: "delegated", threadId: event.to_session_thread_id, agentName: event.to_agent_name ?? null, text });
+        return null;
+      }
+
+      case "agent.thread_message_received": {
+        const text = textOf(event.content);
+        if (text) await hooks.onActivity({ kind: "member_report", threadId: event.from_session_thread_id, agentName: event.from_agent_name ?? null, text });
+        return null;
+      }
+
+      case "agent.message": {
+        const text = textOf(event.content);
+        if (text) await hooks.onActivity({ kind: "lead_message", text });
+        return null;
+      }
 
       case "agent.custom_tool_use": {
         if (event.name !== REPORT_TOOL_NAME) {
