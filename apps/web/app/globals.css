@@ -95,8 +95,9 @@ a {
   z-index: 10;
 }
 
+/* 상단바는 모든 화면에서 같은 폭·위치로 고정한다 (본문 폭과 무관) */
 .site-header__inner {
-  max-width: 1360px;
+  max-width: 2560px;
   margin: 0 auto;
   padding: 0 24px;
   height: 56px;
@@ -1541,15 +1542,14 @@ a {
   }
 }
 
-/* 조직도·자리 배치도는 넓은 모니터에서 좌우로 넓게 쓴다 (작은 화면은 기존 폭과 같음) */
-.page:has(.bleed),
-body:has(.bleed) .site-header__inner {
+/* 조직도·자리 배치도 등은 넓은 모니터에서 본문을 좌우로 넓게 쓴다 (작은 화면은 기존 폭과 같음) */
+.page:has(.bleed) {
   max-width: 2560px;
 }
 
 @media (min-width: 1600px) {
-  .page:has(.bleed),
-  body:has(.bleed) .site-header__inner {
+  .site-header__inner,
+  .page:has(.bleed) {
     padding-left: 40px;
     padding-right: 40px;
   }
