@@ -15,7 +15,7 @@ export default async function OrgChartPage() {
   const women = people.filter((role) => role.person.gender === "female").length;
 
   return (
-    <>
+    <div className="bleed">
       <div className="page-head">
         <div>
           <h1>조직도</h1>
@@ -82,7 +82,7 @@ export default async function OrgChartPage() {
           사람에게 넘깁니다.
         </p>
       </section>
-    </>
+    </div>
   );
 }
 

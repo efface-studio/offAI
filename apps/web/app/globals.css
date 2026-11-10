@@ -232,7 +232,7 @@ a {
   margin-top: 20px;
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   grid-auto-flow: row dense;
   gap: 16px;
   align-items: start;
@@ -846,7 +846,8 @@ a {
 /* ───────── office floor ───────── */
 .floor {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+  grid-auto-flow: row dense;
   gap: 16px;
   padding: 16px;
   border-radius: 12px;
@@ -1525,5 +1526,29 @@ a {
 
   .division--wide .division__teams {
     grid-template-columns: 1fr;
+  }
+}
+
+/* 조직도·자리 배치도는 넓은 모니터에서 좌우로 넓게 쓴다 (작은 화면은 기존 폭과 같음) */
+.page:has(.bleed),
+body:has(.bleed) .site-header__inner {
+  max-width: 2560px;
+}
+
+@media (min-width: 1600px) {
+  .page:has(.bleed),
+  body:has(.bleed) .site-header__inner {
+    padding-left: 40px;
+    padding-right: 40px;
+  }
+}
+
+.zone--wide {
+  grid-column: span 2;
+}
+
+@media (max-width: 960px) {
+  .zone--wide {
+    grid-column: auto;
   }
 }
