@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type Anthropic from "@anthropic-ai/sdk";
-import { REPORT_TOOL_INPUT_SCHEMA, leadOf, listTeams, type Division, type Org, type Role, type Team } from "@offai/core";
+import { RANK_STANDARD, REPORT_TOOL_INPUT_SCHEMA, leadOf, listTeams, type Division, type Org, type Role, type Team } from "@offai/core";
 import { schema, type Db } from "@offai/db";
 import { eq } from "@offai/db";
 
@@ -40,6 +40,9 @@ export function toolsetFor(role: Role): AgentTools[number] {
 function systemPrompt(division: Division, team: Team, role: Role): string {
   return [
     `너는 efface AI 조직 ${division.name} ${team.name}의 ${role.rank} ${role.person.name}이고, ${role.name} 업무를 맡는다.`,
+    `${team.domain || team.name} 분야 경력 ${role.person.years}년의 업계 최고 수준 전문가다.${role.person.background ? ` 경력: ${role.person.background}.` : ""}`,
+    "그 경력에 걸맞게 기준을 높게 잡되, 경력이 근거를 대신하지는 않는다. 모든 판단은 실제 코드·명령 결과·문서로 확인한 사실에 근거한다.",
+    RANK_STANDARD[role.rank],
     `책임: ${role.responsibility}`,
     "",
     role.instructions,
