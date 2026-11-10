@@ -67,7 +67,8 @@ export async function getOrg(): Promise<Org> {
   return (await getOrgWithVersion()).org;
 }
 
-const spentSql = sql<number>`coalesce((select sum(${schema.runs.costCents}) from ${schema.runs} where ${schema.runs.taskId} = ${schema.tasks.id}), 0)::int`;
+// 하위 쿼리 안에서 tasks.id 를 명시해야 runs.id 로 잘못 해석되지 않는다
+const spentSql = sql<number>`coalesce((select sum(r.cost_cents) from runs r where r.task_id = "tasks"."id"), 0)::int`;
 
 export async function getTasks(): Promise<TaskSummary[]> {
   const db = getDb();
