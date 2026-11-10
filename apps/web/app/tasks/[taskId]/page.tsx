@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { STAGE_LABEL, STATUS_LABEL } from "@offai/core";
-import { getOrg, getTask, type RunSummary } from "@/lib/data";
+import { ReportCard } from "@/components/report-card";
+import { getOrg, getTask, getTaskReports, type RunSummary } from "@/lib/data";
 import { formatDate, formatUsd } from "@/lib/format";
 import { approveDeploy, retryTask } from "../../actions";
 import { Notice } from "../../notice";
@@ -22,7 +23,7 @@ const RUN_STATUS = { running: "실행 중", completed: "완료", failed: "실패
 
 export default async function TaskPage({ params, searchParams }: Props) {
   const [{ taskId }, query] = await Promise.all([params, searchParams]);
-  const [task, org] = await Promise.all([getTask(taskId), getOrg()]);
+  const [task, org, reports] = await Promise.all([getTask(taskId), getOrg(), getTaskReports(taskId)]);
   if (!task) notFound();
   const teamName = (id: string | null) => org.divisions.flatMap((division) => division.teams).find((team) => team.id === id)?.name ?? id ?? "-";
   const github = `https://github.com/${task.repo}`;
@@ -90,6 +91,24 @@ export default async function TaskPage({ params, searchParams }: Props) {
       )}
 
       <div className="task-layout">
+        <div>
+        <section aria-labelledby="flow-title" className="report-flow">
+          <h2 id="flow-title" className="section-title">
+            보고 흐름 {reports.length}
+          </h2>
+          {reports.length === 0 ? (
+            <p className="muted">아직 보고가 없습니다.</p>
+          ) : (
+            <ol className="feed__list">
+              {reports.map((report) => (
+                <li key={report.id}>
+                  <ReportCard report={report} org={org} />
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+
         <section aria-labelledby="runs-title">
           <h2 id="runs-title" className="section-title">
             팀 세션 {task.runs.length}
@@ -117,6 +136,7 @@ export default async function TaskPage({ params, searchParams }: Props) {
             </>
           )}
         </section>
+        </div>
 
         <aside aria-labelledby="timeline-title">
           <h2 id="timeline-title" className="section-title">
