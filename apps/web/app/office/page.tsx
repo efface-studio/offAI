@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { STAGE_LABEL, byRank, type Division, type Role, type Team } from "@offai/core";
 import { Avatar } from "@/components/avatar";
-import { getOrg, getTeamActivity, isPreview, type TeamActivity } from "@/lib/data";
+import { getMemberStates, getOrg, getTeamActivity, isPreview, type MemberState, type TeamActivity } from "@/lib/data";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { PreviewBanner } from "../notice";
 
 export const metadata: Metadata = { title: "자리 배치도" };
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 const ACTIVITY_LABEL = { working: "근무 중", waiting: "승인 대기" } as const;
 
 export default async function OfficePage() {
-  const [org, activity] = await Promise.all([getOrg(), getTeamActivity()]);
+  const [org, activity, members] = await Promise.all([getOrg(), getTeamActivity(), getMemberStates()]);
   const working = [...activity.values()].filter((item) => item.state === "working").length;
 
   return (
@@ -19,20 +20,25 @@ export default async function OfficePage() {
       <div className="page-head">
         <div>
           <h1>자리 배치도</h1>
-          <p className="muted">본부별 구역과 팀 자리입니다. 작업을 맡은 팀은 모니터가 켜집니다.</p>
+          <p className="muted">본부별 구역과 팀 자리입니다. 지금 일하는 직원은 모니터가 켜지고, 마우스를 올리면 하는 일이 보입니다.</p>
         </div>
         <dl className="stats">
           <div>
             <dt>근무 중인 팀</dt>
             <dd>{working}</dd>
           </div>
+          <div>
+            <dt>일하는 직원</dt>
+            <dd>{[...members.values()].filter((member) => member.state === "working").length}</dd>
+          </div>
         </dl>
+        <AutoRefresh active={working > 0} intervalMs={8000} />
       </div>
       {isPreview() && <PreviewBanner />}
 
       <div className="floor" role="list" aria-label="사무실 층 배치">
         {org.divisions.map((division) => (
-          <Zone key={division.id} division={division} activity={activity} />
+          <Zone key={division.id} division={division} activity={activity} members={members} />
         ))}
         <section className="zone zone--common" role="listitem" aria-label="공용 공간">
           <h2 className="zone__name">공용 공간</h2>
@@ -56,7 +62,7 @@ export default async function OfficePage() {
   );
 }
 
-function Zone({ division, activity }: { division: Division; activity: Map<string, TeamActivity> }) {
+function Zone({ division, activity, members }: { division: Division; activity: Map<string, TeamActivity>; members: Map<string, MemberState> }) {
   return (
     <section className={`zone zone--${division.id}${division.teams.length > 3 ? " zone--wide" : ""}`} role="listitem" aria-labelledby={`zone-${division.id}`}>
       <header className="zone__head">
@@ -72,14 +78,14 @@ function Zone({ division, activity }: { division: Division; activity: Map<string
       </header>
       <div className="pods">
         {division.teams.map((team) => (
-          <Pod key={team.id} team={team} divisionId={division.id} activity={activity.get(team.id)} />
+          <Pod key={team.id} team={team} divisionId={division.id} activity={activity.get(team.id)} members={members} />
         ))}
       </div>
     </section>
   );
 }
 
-function Pod({ team, divisionId, activity }: { team: Team; divisionId: string; activity: TeamActivity | undefined }) {
+function Pod({ team, divisionId, activity, members }: { team: Team; divisionId: string; activity: TeamActivity | undefined; members: Map<string, MemberState> }) {
   const roles = byRank(team.roles);
   return (
     <article className={`pod${activity ? ` pod--${activity.state}` : ""}`} aria-label={`${team.name} 자리`}>
@@ -91,7 +97,12 @@ function Pod({ team, divisionId, activity }: { team: Team; divisionId: string; a
       </header>
       <ul className="desks">
         {roles.map((role) => (
-          <Desk key={role.id} role={role} divisionId={divisionId} active={Boolean(activity)} />
+          <Desk
+            key={role.id}
+            role={role}
+            divisionId={divisionId}
+            state={members.get(role.id) ?? (role.rank === "팀장" && activity?.state === "working" ? { state: "working", detail: "세션 주관", taskId: activity.taskId, at: new Date() } : undefined)}
+          />
         ))}
       </ul>
       <p className="pod__status">
@@ -111,12 +122,13 @@ function Pod({ team, divisionId, activity }: { team: Team; divisionId: string; a
   );
 }
 
-function Desk({ role, divisionId, active }: { role: Role; divisionId: string; active: boolean }) {
+function Desk({ role, divisionId, state }: { role: Role; divisionId: string; state: MemberState | undefined }) {
   const lead = role.rank === "팀장";
+  const active = state?.state === "working";
   return (
     <li
-      className={`desk${lead ? " desk--lead" : ""}${active ? " desk--on" : ""}`}
-      title={`${role.person.name} ${role.rank} · ${role.name} · 경력 ${role.person.years}년${role.person.background ? ` · ${role.person.background}` : ""}`}
+      className={`desk${lead ? " desk--lead" : ""}${active ? " desk--on" : ""}${state?.state === "reported" ? " desk--reported" : ""}`}
+      title={`${role.person.name} ${role.rank} · ${role.name} · 경력 ${role.person.years}년${role.person.background ? ` · ${role.person.background}` : ""}${state ? `\n지금: ${state.detail.split("\n")[0]}` : ""}`}
     >
       <div className="desk__seat">
         <Avatar seed={role.id} gender={role.person.gender} name={role.person.name} divisionId={divisionId} size={36} senior={lead} />

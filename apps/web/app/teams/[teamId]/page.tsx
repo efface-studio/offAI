@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EFFORTS, MODEL_IDS, RANKS, STAGE_LABEL, byRank, findTeam, type Rank, type Role } from "@offai/core";
 import { Avatar } from "@/components/avatar";
-import { getOrg, isPreview } from "@/lib/data";
+import { ReportCard } from "@/components/report-card";
+import { getOrg, getRecentReports, isPreview } from "@/lib/data";
 import { MODEL_LABEL, formatUsd } from "@/lib/format";
 import { addRole, removeRole, updateTeam } from "../../actions";
 import { Notice, PreviewBanner } from "../../notice";
@@ -24,17 +25,19 @@ const STAFF_RANKS = RANKS.filter((rank) => rank !== "팀장");
 
 export default async function TeamPage({ params, searchParams }: Props) {
   const [{ teamId }, query] = await Promise.all([params, searchParams]);
-  const ref = findTeam(await getOrg(), teamId);
+  const org = await getOrg();
+  const ref = findTeam(org, teamId);
   if (!ref) notFound();
   const { division, team } = ref;
   const readOnly = isPreview();
+  const reports = await getRecentReports(30, { teamId });
 
   return (
     <>
       <nav aria-label="이동 경로" className="crumbs">
         <Link href="/">조직도</Link>
         <span aria-hidden="true">/</span>
-        <span>{division.name}</span>
+        <Link href={`/divisions/${division.id}`}>{division.name}</Link>
       </nav>
       <div className="page-head">
         <div>
@@ -53,6 +56,26 @@ export default async function TeamPage({ params, searchParams }: Props) {
         </ul>
       </div>
       {readOnly ? <PreviewBanner /> : <Notice saved={query.saved} error={query.error} savedText="저장했습니다. worker가 다음 주기에 에이전트를 갱신합니다." />}
+
+      <section aria-labelledby="team-inbox" className="team-inbox">
+        <h2 id="team-inbox" className="section-title">
+          팀 보고함 {reports.length}
+        </h2>
+        {reports.length === 0 ? (
+          <p className="muted">아직 보고가 없습니다. 팀원 보고와 팀장 보고가 이곳에 쌓입니다.</p>
+        ) : (
+          <details className="panel" open={reports.length <= 5}>
+            <summary>최근 보고 {reports.length}건</summary>
+            <ol className="feed__list">
+              {reports.map((report) => (
+                <li key={report.id}>
+                  <ReportCard report={report} org={org} showTask />
+                </li>
+              ))}
+            </ol>
+          </details>
+        )}
+      </section>
 
       <form action={updateTeam} className="team-form">
         <input type="hidden" name="teamId" value={team.id} />

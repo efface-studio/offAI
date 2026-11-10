@@ -106,7 +106,11 @@ function DivisionColumn({ division, spentCents }: { division: Division; spentCen
         <div className="division__title">
           <Avatar seed={`head-${division.id}`} gender={division.head.gender} name={division.head.name} divisionId={division.id} size={40} senior />
           <div>
-            <h2>{division.name}</h2>
+            <h2>
+              <Link href={`/divisions/${division.id}`} className="division__link">
+                {division.name}
+              </Link>
+            </h2>
             <p className="division__leader" title={division.head.background || undefined}>
               본부장 {division.head.name} · 경력 {division.head.years}년
             </p>

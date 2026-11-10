@@ -1,6 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import {
   GITMOJI,
+  STAGE_LABEL,
+  leadOf,
   OUTCOME_LABEL,
   buildHandoff,
   findTeam,
@@ -34,7 +36,7 @@ export type GitHubPort = Pick<
   GitHub,
   "defaultBranch" | "changedFiles" | "branchExists" | "findOpenPr" | "createPr" | "comment" | "createIssue" | "installationToken"
 >;
-import { runSession, type RunResult, type ToolDecision } from "./runner";
+import { runSession, type RunResult, type SessionActivity, type ToolDecision } from "./runner";
 import type { WebhookCommand } from "./webhook";
 
 type Task = typeof schema.tasks.$inferSelect;
@@ -298,6 +300,65 @@ export class Orchestrator {
     await db.update(schema.tasks).set({ teamId: ref.team.id, updatedAt: new Date() }).where(eq(schema.tasks.id, task.id));
     await addTaskEvent(db, task.id, ref.team.name, `${ref.team.name} 세션 시작`);
 
+    // 세션 안의 활동을 직원 단위로 기록한다 (threadId → 직원)
+    const lead = leadOf(ref.team);
+    const threads = new Map<string, string>();
+    const roleOf = (roleId: string | null | undefined) => (roleId ? ref.team.roles.find((role) => role.id === roleId) : undefined);
+    const roleByAgentName = (agentName: string | null) => {
+      const roleId = agentName?.split("/").pop();
+      return roleOf(roleId)?.id ?? null;
+    };
+    const label = (roleId: string | null) => {
+      const role = roleOf(roleId);
+      return role ? `${role.person.name} ${role.rank}` : "팀원";
+    };
+    const record = (kind: schema.ActivityKind, actorRoleId: string | null, targetRoleId: string | null, detail: string) =>
+      db.insert(schema.activities).values({ taskId: task.id, runId: run.id, teamId: ref.team.id, kind, actorRoleId, targetRoleId, detail: clip(detail, 2000) });
+    await record("session_started", lead.id, null, `${ref.team.name} ${STAGE_LABEL[task.stage]} 세션 시작 — ${lead.person.name} 팀장 주관`);
+
+    const onActivity = async (activity: SessionActivity) => {
+      switch (activity.kind) {
+        case "member_joined": {
+          const roleId = roleByAgentName(activity.agentName);
+          if (roleId) threads.set(activity.threadId, roleId);
+          await record("member_joined", roleId, null, `${label(roleId)} 투입`);
+          return;
+        }
+        case "delegated": {
+          const target = roleByAgentName(activity.agentName) ?? threads.get(activity.threadId) ?? null;
+          await record("delegated", lead.id, target, activity.text);
+          return;
+        }
+        case "member_report": {
+          const actor = roleByAgentName(activity.agentName) ?? threads.get(activity.threadId) ?? null;
+          await record("member_report", actor, lead.id, activity.text);
+          if (actor) {
+            await db.insert(schema.reports).values({
+              taskId: task.id,
+              runId: run.id,
+              level: "member",
+              stage: task.stage,
+              divisionId: ref.division.id,
+              teamId: ref.team.id,
+              roleId: actor,
+              outcome: "completed",
+              summary: clip(activity.text.split("\n").find((line) => line.trim()) ?? activity.text, 200),
+              body: clip(activity.text, 4000),
+            });
+          }
+          return;
+        }
+        case "tool": {
+          const actor = activity.threadId ? (threads.get(activity.threadId) ?? null) : lead.id;
+          await record("tool", actor, null, describeTool(activity.tool, activity.input));
+          return;
+        }
+        case "lead_message":
+          await record("lead_message", lead.id, null, activity.text);
+          return;
+      }
+    };
+
     const commitType = branchTypeFor(task.labels);
     const branchReady = task.branch !== null && (await github.branchExists(task.repo, task.branch));
     const checkoutBranch = task.stage === "implement" ? (branchReady && task.branch ? task.branch : baseBranch) : task.stage === "verify" && task.branch ? task.branch : baseBranch;
@@ -340,7 +401,15 @@ export class Orchestrator {
         onCost: async (costCents) => {
           await db.update(schema.runs).set({ costCents }).where(eq(schema.runs.id, run.id));
         },
-        decideTool: (event) => this.decideTool(task.id, run.id, event),
+        decideTool: async (event) => {
+          const actor = event.threadId ? (threads.get(event.threadId) ?? null) : lead.id;
+          const decision = await this.decideTool(task.id, run.id, event);
+          if (event.name === "bash" && decision.result === "deny") {
+            await record("policy", actor, null, `명령 거부: ${decision.message ?? ""}`);
+          }
+          return decision;
+        },
+        onActivity,
         log: (message) => log.info(`[${ref.team.id}] ${message}`),
       },
     );
@@ -366,7 +435,7 @@ export class Orchestrator {
       summary: result.ok ? result.report.summary : result.error,
       body: result.ok ? reportBody(result.report) : "",
     });
-    const lead = ref.team.roles.find((role) => role.rank === "팀장");
+    await record("session_finished", lead.id, null, result.ok ? `세션 종료 — ${OUTCOME_LABEL[result.report.outcome]}: ${result.report.summary}` : `세션 종료 — 진행 불가: ${result.error}`);
     await addTaskEvent(
       db,
       task.id,
@@ -590,3 +659,28 @@ function list(title: string, items: string[]): string {
   return items.length ? `${title}\n${items.map((item) => `- ${item}`).join("\n")}\n\n` : "";
 }
 
+
+function clip(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+/** 도구 호출을 사람이 읽을 한 줄로 */
+export function describeTool(tool: string, input: Record<string, unknown>): string {
+  const str = (key: string) => (typeof input[key] === "string" ? (input[key] as string) : "");
+  switch (tool) {
+    case "bash":
+      return str("command") ? `$ ${clip(str("command"), 300)}` : "bash 재시작";
+    case "read":
+      return `파일 읽기 ${str("file_path")}`;
+    case "write":
+      return `파일 작성 ${str("file_path")}`;
+    case "edit":
+      return `파일 수정 ${str("file_path")}`;
+    case "glob":
+      return `파일 찾기 ${str("pattern")}`;
+    case "grep":
+      return `코드 검색 ${str("pattern")}${str("path") ? ` (${str("path")})` : ""}`;
+    default:
+      return tool;
+  }
+}

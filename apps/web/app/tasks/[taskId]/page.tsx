@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { STAGE_LABEL, STATUS_LABEL } from "@offai/core";
+import { ActivityTimeline, StaffBoard } from "@/components/activity";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { ReportCard } from "@/components/report-card";
-import { getOrg, getTask, getTaskReports, type RunSummary } from "@/lib/data";
+import { getOrg, getTask, getTaskActivities, getTaskReports, type RunSummary } from "@/lib/data";
 import { formatDate, formatUsd } from "@/lib/format";
 import { approveDeploy, retryTask } from "../../actions";
 import { Notice } from "../../notice";
@@ -23,10 +25,18 @@ const RUN_STATUS = { running: "실행 중", completed: "완료", failed: "실패
 
 export default async function TaskPage({ params, searchParams }: Props) {
   const [{ taskId }, query] = await Promise.all([params, searchParams]);
-  const [task, org, reports] = await Promise.all([getTask(taskId), getOrg(), getTaskReports(taskId)]);
+  const [task, org, reports, activities] = await Promise.all([getTask(taskId), getOrg(), getTaskReports(taskId), getTaskActivities(taskId)]);
   if (!task) notFound();
   const teamName = (id: string | null) => org.divisions.flatMap((division) => division.teams).find((team) => team.id === id)?.name ?? id ?? "-";
   const github = `https://github.com/${task.repo}`;
+  const live = task.status === "running" || task.status === "awaiting_approval";
+  // 현재 단계의 최근 세션들 (팀별 마지막 세션)
+  const stageRuns = task.runs.filter((run) => run.stage === task.stage);
+  const latestByTeam = new Map(stageRuns.map((run) => [run.teamId, run]));
+  const boards = [...latestByTeam.values()].map((run) => ({
+    run,
+    items: activities.filter((item) => item.runId === run.id),
+  }));
 
   return (
     <>
@@ -79,6 +89,7 @@ export default async function TaskPage({ params, searchParams }: Props) {
         </div>
       </div>
       <Notice saved={query.saved} error={query.error} savedText="반영했습니다" />
+      <AutoRefresh active={live} />
 
       {task.reason && (
         <p className="notice notice--warn" role="status">
@@ -90,8 +101,28 @@ export default async function TaskPage({ params, searchParams }: Props) {
         <p className="notice notice--warn">릴리스팀이 배포 요청서를 PR에 남겼습니다. production 배포를 마친 뒤 &lsquo;배포 완료 기록&rsquo;을 누르세요.</p>
       )}
 
+      {boards.length > 0 && (
+        <section aria-labelledby="now-title" className="now">
+          <h2 id="now-title" className="section-title">
+            지금 누가 무엇을
+          </h2>
+          <div className="now__boards">
+            {boards.map(({ run, items }) => (
+              <StaffBoard key={run.id} org={org} teamId={run.teamId} items={items} runActive={run.status === "running"} />
+            ))}
+          </div>
+        </section>
+      )}
+
       <div className="task-layout">
         <div>
+        <section aria-labelledby="process-title" className="report-flow">
+          <h2 id="process-title" className="section-title">
+            작업 과정 {activities.length}
+          </h2>
+          <ActivityTimeline org={org} items={activities} runs={task.runs} />
+        </section>
+
         <section aria-labelledby="flow-title" className="report-flow">
           <h2 id="flow-title" className="section-title">
             보고 흐름 {reports.length}
