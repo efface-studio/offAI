@@ -112,7 +112,7 @@ describe.skipIf(!url)("작업 흐름 (Postgres)", () => {
   });
 
   beforeEach(async () => {
-    await db.execute(sql`truncate table task_events, approvals, runs, tasks, agents, settings, org_versions restart identity cascade`);
+    await db.execute(sql`truncate table reports, task_events, approvals, runs, tasks, agents, settings, org_versions restart identity cascade`);
     const version = await saveOrg(db, DEFAULT_ORG, "test");
     await setSetting(db, SYNCED_ORG_SETTING, String(version));
     await setSetting(db, ENVIRONMENT_SETTING, "env_test");
@@ -172,6 +172,9 @@ describe.skipIf(!url)("작업 흐름 (Postgres)", () => {
     const implement = calls.find((call) => call.stage === "implement")!;
     expect(implement.input.checkoutBranch).toBe("main");
     expect(implement.input.brief).toContain("footer 링크 수정");
+    // 기획본부 보고가 구현팀에 인계된다
+    expect(implement.input.brief).toContain("## 이전 팀 보고 (인계)");
+    expect(implement.input.brief).toContain("[기획] 기획본부 디자인팀 — 완료");
 
     github.changed = ["app/auth/session.ts", "package.json"]; // 보안 경로 → 보안팀, package.json → 법무팀
     await step(); // 검증 1회차: 수정 요청
@@ -185,6 +188,8 @@ describe.skipIf(!url)("작업 흐름 (Postgres)", () => {
     expect(rework.input.brief).toContain("app/footer.tsx:8 테스트 누락");
     expect(github.prs).toHaveLength(1);
 
+    // 재구현 팀은 검증팀의 수정 요청 보고까지 인계받는다
+    expect(rework.input.brief).toContain("[검증] 품질본부 QA팀 — 수정 요청");
     await step(); // 검증 2회차: QA + 보안 통과
     task = await currentTask();
     expect(task).toMatchObject({ stage: "verify", status: "awaiting_merge" });
@@ -206,6 +211,27 @@ describe.skipIf(!url)("작업 흐름 (Postgres)", () => {
 
     await orchestrator.applyById(task.id, { type: "deploy_approved" }, "xixn2");
     expect((await currentTask()).status).toBe("done");
+
+    // 팀 보고는 세션마다, 본부 보고는 단계·본부마다 남는다
+    const allReports = await db.select().from(schema.reports).orderBy(schema.reports.createdAt);
+    const teamReports = allReports.filter((report) => report.level === "team");
+    expect(teamReports).toHaveLength(calls.length);
+    const divisionReports = allReports.filter((report) => report.level === "division");
+    expect(divisionReports.map((report) => `${report.stage}:${report.divisionId}`)).toEqual([
+      "plan:planning",
+      "implement:product",
+      "verify:quality",
+      "verify:risk",
+      "implement:product",
+      "verify:quality",
+      "verify:risk",
+      "release:operations",
+      "release:business",
+    ]);
+    expect(divisionReports[0]).toMatchObject({ nextTeamId: "web", outcome: "completed" });
+    expect(divisionReports[2]).toMatchObject({ nextTeamId: "web", outcome: "changes_requested" });
+    expect(divisionReports[5]).toMatchObject({ nextTeamId: null, nextHuman: "PR 검토와 merge" });
+    expect(divisionReports[7]).toMatchObject({ nextHuman: "production 배포" });
 
     const runs = await db.select().from(schema.runs);
     expect(runs.every((run) => run.status === "completed" && run.costCents === 120)).toBe(true);

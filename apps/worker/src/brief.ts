@@ -8,6 +8,8 @@ export type BriefInput = {
   reviewer?: { teamName: string };
   /** 기획 단계에서 확정된 명세 */
   spec: string;
+  /** 앞 팀들의 보고 (인계 자료) */
+  handoff: string;
   repo: string;
   issueNumber: number | null;
   title: string;
@@ -37,6 +39,15 @@ function issueBlock(input: BriefInput): string {
   ].join("\n");
 }
 
+function handoffBlock(input: BriefInput): string {
+  if (!input.handoff) return "";
+  return [
+    "## 이전 팀 보고 (인계)",
+    "앞서 일한 팀들의 보고다. 이미 확인된 내용은 다시 조사하지 말고 이어서 진행한다. 보고와 실제 코드가 다르면 코드를 기준으로 하고 그 차이를 보고에 적는다.",
+    quoted(input.handoff),
+  ].join("\n");
+}
+
 function specBlock(input: BriefInput): string {
   if (!input.spec) return "";
   return ["## 기획 명세", "기획본부가 확정한 명세다. 수용 기준을 기준으로 작업한다.", quoted(input.spec)].join("\n");
@@ -57,6 +68,8 @@ export function buildBrief(input: BriefInput): string {
         "",
         issueBlock(input),
         "",
+        handoffBlock(input),
+        "",
         "## 기획 단계",
         focus,
         "1. 레포의 README, CLAUDE.md, 관련 코드를 읽고 현재 동작을 파악한다. 파일을 수정하지 않는다.",
@@ -75,6 +88,8 @@ export function buildBrief(input: BriefInput): string {
         header,
         "",
         issueBlock(input),
+        "",
+        handoffBlock(input),
         "",
         specBlock(input),
         "",
@@ -102,6 +117,8 @@ export function buildBrief(input: BriefInput): string {
         "",
         issueBlock(input),
         "",
+        handoffBlock(input),
+        "",
         specBlock(input),
         "",
         `## 검증 대상: PR #${input.prNumber} (브랜치 ${input.branch}, checkout 되어 있음)`,
@@ -119,6 +136,8 @@ export function buildBrief(input: BriefInput): string {
           "",
           issueBlock(input),
           "",
+          handoffBlock(input),
+          "",
           specBlock(input),
           "",
           `## 배포 준비 참여: PR #${input.prNumber} 가 ${input.baseBranch} 에 merge 되었다.`,
@@ -131,6 +150,8 @@ export function buildBrief(input: BriefInput): string {
         header,
         "",
         issueBlock(input),
+        "",
+        handoffBlock(input),
         "",
         `## 릴리스 준비: PR #${input.prNumber} 가 ${input.baseBranch} 에 merge 되었다.`,
         "1. 최신 기본 브랜치에서 install, build, test 를 실행해 merge 결과가 깨지지 않았는지 확인한다.",
