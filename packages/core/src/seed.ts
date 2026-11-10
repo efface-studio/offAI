@@ -1,4 +1,4 @@
-import type { Org, Role } from "./org.js";
+import type { Org, Role } from "./org";
 
 const RULES = `작업 규칙:
 - 작업 브랜치에서만 커밋하고 push한다. main에는 절대 push하지 않는다.

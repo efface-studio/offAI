@@ -1,4 +1,4 @@
-import type { Stage } from "./org.js";
+import type { Stage } from "./org";
 
 export const TASK_STATUSES = [
   "queued",

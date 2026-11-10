@@ -14,7 +14,7 @@ import {
   routeTask,
   transition,
   type TaskState,
-} from "./index.js";
+} from "./index";
 
 describe("기본 조직", () => {
   it("스키마를 통과한다", () => {

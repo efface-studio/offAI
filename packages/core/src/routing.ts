@@ -1,4 +1,4 @@
-import { listTeams, type Org, type Stage, type TeamRef } from "./org.js";
+import { listTeams, type Org, type Stage, type TeamRef } from "./org";
 
 export type RoutingInput = {
   stage: Stage;
