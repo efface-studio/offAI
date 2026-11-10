@@ -41,7 +41,7 @@ export default async function SettingsPage({ searchParams }: Props) {
             <h2 id="divisions">본부</h2>
             <ul className="division-settings">
               {org.divisions.map((division) => (
-                <li key={division.id} className="grid-5">
+                <li key={division.id} className="grid-6">
                   <label className="field">
                     <span>본부 이름</span>
                     <input name={`division.${division.id}.name`} defaultValue={division.name} required maxLength={40} />
@@ -53,6 +53,10 @@ export default async function SettingsPage({ searchParams }: Props) {
                   <label className="field">
                     <span>본부장</span>
                     <input name={`division.${division.id}.headName`} defaultValue={division.head.name} required maxLength={20} />
+                  </label>
+                  <label className="field">
+                    <span>본부장 경력 (년)</span>
+                    <input name={`division.${division.id}.headYears`} type="number" min="0" max="50" defaultValue={division.head.years} required />
                   </label>
                   <label className="field">
                     <span>본부장 성별</span>
@@ -128,6 +132,10 @@ export default async function SettingsPage({ searchParams }: Props) {
                   <option value="primary">주 담당</option>
                   <option value="conditional">조건부</option>
                 </select>
+              </label>
+              <label className="field">
+                <span>전문 분야</span>
+                <input name="domain" maxLength={60} placeholder="모바일 앱 개발" />
               </label>
               <label className="field">
                 <span>label (쉼표로 구분)</span>

@@ -59,10 +59,14 @@ export default async function TeamPage({ params, searchParams }: Props) {
         <fieldset disabled={readOnly} className="team-form__fields">
           <section className="panel" aria-labelledby="team-basics">
             <h2 id="team-basics">팀 설정</h2>
-            <div className="grid-3">
+            <div className="grid-4">
               <label className="field">
                 <span>팀 이름</span>
                 <input name="name" defaultValue={team.name} required maxLength={40} />
+              </label>
+              <label className="field">
+                <span>전문 분야</span>
+                <input name="domain" defaultValue={team.domain} maxLength={60} placeholder="웹 프론트엔드" />
               </label>
               <label className="field">
                 <span>참여 방식</span>
@@ -138,7 +142,15 @@ export default async function TeamPage({ params, searchParams }: Props) {
                 <input name="id" required pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder={`${team.id}-analyst`} />
               </label>
             </div>
-            <div className="grid-2">
+            <div className="grid-4">
+              <label className="field">
+                <span>경력 (년)</span>
+                <input name="years" type="number" min="0" max="50" defaultValue={10} required />
+              </label>
+              <label className="field">
+                <span>경력 배경</span>
+                <input name="background" maxLength={200} placeholder="빅테크 프론트엔드 개발" />
+              </label>
               <label className="field">
                 <span>직무</span>
                 <input name="name" required maxLength={40} placeholder="데이터 분석" />
@@ -179,7 +191,7 @@ function RoleEditor({ role, divisionId }: { role: Role; divisionId: string }) {
               {lead && <span className="tag">세션 coordinator</span>}
             </h2>
             <p>
-              {role.name} · {role.responsibility}
+              {role.name} · 경력 {role.person.years}년{role.person.background && ` · ${role.person.background}`}
             </p>
           </div>
         </div>
@@ -223,10 +235,20 @@ function RoleEditor({ role, divisionId }: { role: Role; divisionId: string }) {
           <input name={`${prefix}.name`} defaultValue={role.name} required maxLength={40} />
         </label>
       </div>
-      <label className="field">
-        <span>책임</span>
-        <input name={`${prefix}.responsibility`} defaultValue={role.responsibility} required maxLength={200} />
-      </label>
+      <div className="grid-3">
+        <label className="field">
+          <span>경력 (년)</span>
+          <input name={`${prefix}.years`} type="number" min="0" max="50" defaultValue={role.person.years} required />
+        </label>
+        <label className="field">
+          <span>경력 배경</span>
+          <input name={`${prefix}.background`} defaultValue={role.person.background} maxLength={200} />
+        </label>
+        <label className="field">
+          <span>책임</span>
+          <input name={`${prefix}.responsibility`} defaultValue={role.responsibility} required maxLength={200} />
+        </label>
+      </div>
       <ModelFields prefix={prefix} defaults={role} />
       <details className="role-detail__prompt">
         <summary>업무 지침</summary>

@@ -34,6 +34,23 @@ function dollarsToCents(value: string, label: string): number {
   return Math.round(amount * 100);
 }
 
+function years(value: string, label: string): number {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 0 || n > 50) throw new Error(`${label} 경력은 0~50 사이 정수여야 합니다`);
+  return n;
+}
+
+/** 폼에서 인물 정보를 읽는다. prefix 가 있으면 `${prefix}.` 를 붙인다. */
+function personFrom(form: FormData, prefix: string, label: string) {
+  const key = (name: string) => (prefix ? `${prefix}.${name}` : name);
+  return {
+    name: field(form, key("personName")),
+    gender: oneOf(GENDERS, field(form, key("gender")), `${label} 성별`),
+    years: years(field(form, key("years")), label),
+    background: field(form, key("background")),
+  };
+}
+
 function lines(value: string): string[] {
   return value
     .split(/[\n,]/)
@@ -102,6 +119,7 @@ export async function updateTeam(form: FormData): Promise<void> {
   await editOrg(`/teams/${teamId}`, (org) => {
     const { team } = findTeamIn(org, teamId);
     team.name = field(form, "name");
+    team.domain = field(form, "domain");
     team.assignment = oneOf(ASSIGNMENTS, field(form, "assignment"), "참여 방식");
     team.labels = lines(field(form, "labels"));
     team.triggerPaths = lines(field(form, "triggerPaths"));
@@ -110,7 +128,7 @@ export async function updateTeam(form: FormData): Promise<void> {
       ...role,
       name: field(form, `role.${role.id}.name`),
       rank: oneOf(RANKS, field(form, `role.${role.id}.rank`), "직급"),
-      person: { name: field(form, `role.${role.id}.personName`), gender: oneOf(GENDERS, field(form, `role.${role.id}.gender`), "성별") },
+      person: personFrom(form, `role.${role.id}`, role.person.name),
       responsibility: field(form, `role.${role.id}.responsibility`),
       instructions: field(form, `role.${role.id}.instructions`),
       model: oneOf(MODEL_IDS, field(form, `role.${role.id}.model`), "모델"),
@@ -134,7 +152,7 @@ export async function addRole(form: FormData): Promise<void> {
       id,
       name: field(form, "name"),
       rank,
-      person: { name: field(form, "personName"), gender: oneOf(GENDERS, field(form, "gender"), "성별") },
+      person: personFrom(form, "", "새 직원"),
       responsibility: field(form, "responsibility"),
       instructions: field(form, "instructions"),
       model: oneOf(MODEL_IDS, field(form, "model"), "모델"),
@@ -169,6 +187,8 @@ export async function updateSettings(form: FormData): Promise<void> {
       division.head = {
         name: field(form, `division.${division.id}.headName`),
         gender: oneOf(GENDERS, field(form, `division.${division.id}.headGender`), "본부장 성별"),
+        years: years(field(form, `division.${division.id}.headYears`), "본부장"),
+        background: division.head.background,
       };
       division.monthlyBudgetCents = dollarsToCents(field(form, `division.${division.id}.budget`), `${division.name} 월 예산`);
     }
@@ -185,6 +205,7 @@ export async function addTeam(form: FormData): Promise<void> {
       id,
       name,
       stage: oneOf(STAGES, field(form, "stage"), "단계"),
+      domain: field(form, "domain"),
       assignment: oneOf(ASSIGNMENTS, field(form, "assignment"), "참여 방식"),
       labels: lines(field(form, "labels")),
       triggerPaths: [],
@@ -194,7 +215,7 @@ export async function addTeam(form: FormData): Promise<void> {
           id: `${id}-lead`,
           name: `${name} 리드`,
           rank: "팀장",
-          person: { name: field(form, "leadName"), gender: oneOf(GENDERS, field(form, "leadGender"), "팀장 성별") },
+          person: { name: field(form, "leadName"), gender: oneOf(GENDERS, field(form, "leadGender"), "팀장 성별"), years: 20, background: "" },
           responsibility: "작업 계획, 위임, 결과 보고",
           instructions: `너는 ${name} 팀장이다. 브리프의 할 일을 수행하고 report_result 로 보고한다.`,
           ...RANK_DEFAULTS.팀장,

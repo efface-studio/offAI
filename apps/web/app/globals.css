@@ -1213,6 +1213,18 @@ a {
 .grid-5 {
   grid-template-columns: 1fr 2fr 1fr 0.8fr 0.8fr;
 }
+.grid-6 {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+  grid-template-columns: 1fr 2fr 1fr 0.7fr 0.8fr 0.8fr;
+}
+
+@media (max-width: 960px) {
+  .grid-6 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 
 .division-settings li {
   padding-bottom: 12px;
