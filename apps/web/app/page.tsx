@@ -107,7 +107,9 @@ function DivisionColumn({ division, spentCents }: { division: Division; spentCen
           <Avatar seed={`head-${division.id}`} gender={division.head.gender} name={division.head.name} divisionId={division.id} size={40} senior />
           <div>
             <h2>{division.name}</h2>
-            <p className="division__leader">본부장 {division.head.name}</p>
+            <p className="division__leader" title={division.head.background || undefined}>
+              본부장 {division.head.name} · 경력 {division.head.years}년
+            </p>
           </div>
         </div>
         <p className="division__mission">{division.mission}</p>
@@ -148,8 +150,8 @@ function TeamCard({ team, divisionId }: { team: Team; divisionId: string }) {
                 <span className="member__name">
                   {role.person.name} <span className={`rank rank--${role.rank === "팀장" ? "lead" : "staff"}`}>{role.rank}</span>
                 </span>
-                <span className="member__job">
-                  {role.name} · {MODEL_LABEL[role.model]}
+                <span className="member__job" title={role.person.background || undefined}>
+                  {role.name} · {role.person.years}년 · {MODEL_LABEL[role.model]}
                 </span>
               </span>
             </li>

@@ -51,6 +51,10 @@ const repo = z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, "레포는 o
 export const personSchema = z.object({
   name: z.string().min(1).max(20),
   gender: z.enum(GENDERS),
+  /** 업계 경력 연차 */
+  years: z.number().int().min(0).max(50).default(10),
+  /** 경력 배경 한 줄 (예: 대형 법무법인 파트너 변호사) */
+  background: z.string().max(200).default(""),
 });
 export type Person = z.infer<typeof personSchema>;
 
@@ -72,6 +76,8 @@ export const teamSchema = z.object({
   id: slug,
   name: z.string().min(1).max(40),
   stage: z.enum(STAGES),
+  /** 팀의 전문 분야 (system prompt 에 들어간다) */
+  domain: z.string().max(60).default(""),
   assignment: z.enum(ASSIGNMENTS),
   /** primary: 이 label 이 붙은 작업을 우선 맡는다 / conditional: 이 label 이 붙으면 참여한다 */
   labels: z.array(z.string().min(1)).max(10),

@@ -114,7 +114,10 @@ function Pod({ team, divisionId, activity }: { team: Team; divisionId: string; a
 function Desk({ role, divisionId, active }: { role: Role; divisionId: string; active: boolean }) {
   const lead = role.rank === "팀장";
   return (
-    <li className={`desk${lead ? " desk--lead" : ""}${active ? " desk--on" : ""}`}>
+    <li
+      className={`desk${lead ? " desk--lead" : ""}${active ? " desk--on" : ""}`}
+      title={`${role.person.name} ${role.rank} · ${role.name} · 경력 ${role.person.years}년${role.person.background ? ` · ${role.person.background}` : ""}`}
+    >
       <div className="desk__seat">
         <Avatar seed={role.id} gender={role.person.gender} name={role.person.name} divisionId={divisionId} size={36} senior={lead} />
       </div>

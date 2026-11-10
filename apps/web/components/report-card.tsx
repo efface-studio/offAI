@@ -15,8 +15,8 @@ export function ReportCard({ report, org, showTask = false }: Props) {
 
   const author =
     report.level === "division"
-      ? { seed: `head-${report.divisionId}`, name: division?.head.name ?? "본부장", gender: division?.head.gender ?? "female", title: `${division?.name ?? report.divisionId} 본부장` }
-      : { seed: lead?.id ?? report.teamId ?? "team", name: lead?.person.name ?? "팀장", gender: lead?.person.gender ?? "male", title: `${team?.name ?? report.teamId} 팀장` };
+      ? { seed: `head-${report.divisionId}`, name: division?.head.name ?? "본부장", gender: division?.head.gender ?? "female", title: `${division?.name ?? report.divisionId} 본부장 · 경력 ${division?.head.years ?? 0}년` }
+      : { seed: lead?.id ?? report.teamId ?? "team", name: lead?.person.name ?? "팀장", gender: lead?.person.gender ?? "male", title: `${team?.name ?? report.teamId} 팀장${lead ? ` · 경력 ${lead.person.years}년` : ""}` };
 
   return (
     <article className={`report report--${report.level} report--${report.outcome}`}>

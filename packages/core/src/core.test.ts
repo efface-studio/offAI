@@ -31,6 +31,33 @@ describe("기본 조직", () => {
     expect(orgSchema.safeParse(broken).success).toBe(false);
   });
 
+  it("경력: 본부장 30년+, 팀장 20년+, 책임 15년+, 선임 10년+, 사원 5년+", () => {
+    const min = { 팀장: 20, 책임: 15, 선임: 10, 주임: 7, 사원: 5 } as const;
+    for (const division of DEFAULT_ORG.divisions) {
+      expect(division.head.years).toBeGreaterThanOrEqual(30);
+      for (const team of division.teams) {
+        expect(team.domain).not.toBe("");
+        for (const role of team.roles) expect(role.person.years).toBeGreaterThanOrEqual(min[role.rank]);
+      }
+    }
+    const legal = listTeams(DEFAULT_ORG).find(({ team }) => team.id === "legal")!.team;
+    expect(legal.roles.filter((role) => role.person.years >= 30)).toHaveLength(3);
+  });
+
+  it("예전 버전처럼 경력 정보가 없는 설정도 기본값으로 읽는다", () => {
+    const legacy = JSON.parse(JSON.stringify(DEFAULT_ORG)) as { divisions: { head: Record<string, unknown>; teams: { domain?: string; roles: { person: Record<string, unknown> }[] }[] }[] };
+    for (const division of legacy.divisions) {
+      delete division.head.years;
+      for (const team of division.teams) {
+        delete team.domain;
+        for (const role of team.roles) delete role.person.background;
+      }
+    }
+    const parsed = orgSchema.parse(legacy);
+    expect(parsed.divisions[0]!.head.years).toBe(10);
+    expect(parsed.divisions[0]!.teams[0]!.domain).toBe("");
+  });
+
   it("단계마다 주 담당 팀이 있어야 한다", () => {
     const broken = structuredClone(DEFAULT_ORG);
     broken.divisions = broken.divisions.filter((division) => division.id !== "quality");
