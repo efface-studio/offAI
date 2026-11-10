@@ -5,10 +5,10 @@
   "packageManager": "pnpm@11.16.0",
   "engines": { "node": ">=22" },
   "scripts": {
-    "typecheck": "pnpm -r run typecheck",
+    "typecheck": "pnpm -r --if-present run typecheck",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
-    "build": "pnpm -r run build"
+    "build": "pnpm -r --if-present run build"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
