@@ -1,5 +1,5 @@
 import { DEFAULT_ORG, monthStart, orgSchema, routeTask, transition, type Org, type TaskEvent, type TaskState } from "@offai/core";
-import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
@@ -75,4 +75,4 @@ export async function setSetting(db: Db, key: string, value: string): Promise<vo
     .onConflictDoUpdate({ target: schema.settings.key, set: { value, updatedAt: new Date() } });
 }
 
-export { and, desc, eq, gte, isNull, sql };
+export { and, desc, eq, gte, inArray, isNull, sql };

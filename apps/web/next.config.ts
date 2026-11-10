@@ -10,7 +10,7 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  transpilePackages: ["@offai/core"],
+  transpilePackages: ["@offai/core", "@offai/db"],
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
